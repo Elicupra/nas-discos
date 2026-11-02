@@ -6,6 +6,64 @@ Aplicación local en Python que busca discos duros internos HDD (2,5" y 3,5")
 en tiendas españolas, muestra una tabla comparable y guarda un histórico en
 SQLite con favoritos y avisos de productos desaparecidos.
 
+## Convenciones de OpenCode
+
+Este repositorio usa **OpenCode V2**. `AGENTS.md` es el archivo de
+instrucciones persistentes que OpenCode carga automáticamente; no se usa
+`CLAUDE.md` como respaldo. La documentación oficial está en
+<https://opencode.ai/v2/docs/>.
+
+### Alcance y carga
+
+- Las instrucciones globales van en `~/.config/opencode/AGENTS.md`.
+- Las instrucciones del repositorio van en este `AGENTS.md`.
+- Los `AGENTS.md` anidados se cargan al leer esa zona del proyecto. Usa uno
+  cerca del código solo si sus reglas no aplican a todo el repositorio.
+- OpenCode combina los archivos en lugar de resolver conflictos: evita repetir
+  reglas y deja claro cuál manda cuando haya excepciones.
+- Los cambios en este archivo se aplican sin reiniciar la sesión. Si cambia un
+  `AGENTS.md` anidado ya cargado, inicia una sesión nueva.
+- Este archivo se versiona en git para que todo el mundo reciba las mismas
+  instrucciones.
+
+### Cómo redactar instrucciones
+
+- Usa frases imperativas, concretas y verificables.
+- Incluye comandos exactos de instalación, pruebas y verificación.
+- Documenta la arquitectura y las convenciones que no se deducen leyendo el
+  código.
+- No incluyas secretos, tokens, rutas personales ni datos locales.
+- Mantén las reglas cerca del código al que afectan y actualiza este archivo
+  cuando cambie el flujo de trabajo.
+- No dupliques la documentación extensa: enlaza `README.md`,
+  `Install_dependences.md` o `POCKETBASE.md` cuando corresponda.
+
+### Configuración y extensiones
+
+- La configuración de OpenCode vive en `opencode.json(c)` o
+  `.opencode/opencode.json(c)`. Incluye siempre
+  `"$schema": "https://opencode.ai/config.json"`.
+- Las preferencias de terminal van aparte, en `cli.json`; no las mezcles con
+  la configuración del proyecto.
+- Los agentes personalizados van en `.opencode/agents/*.md`, los comandos en
+  `.opencode/commands/*.md` y las skills en
+  `.opencode/skills/<id>/SKILL.md`.
+- No inventes campos de configuración: consulta la documentación V2 antes de
+  añadir o modificar opciones.
+- Los permisos se declaran como reglas ordenadas; la última regla que coincide
+  gana. Usa `allow`, `ask` o `deny` de forma explícita para operaciones
+  destructivas o fuera del repositorio.
+
+### Uso en este proyecto
+
+- Antes de tocar código, revisa este archivo y el `README.md`.
+- Sigue el flujo de ramas y la verificación de la sección siguiente.
+- No ejecutes `git push`, despliegues ni borres datos sin confirmación.
+- No edites `data/`, `*.sqlite3` ni `nas_discos.html`: son datos locales
+  ignorados por git.
+- Si una tarea requiere cambiar las convenciones del repositorio, actualiza
+  este `AGENTS.md` en la misma rama.
+
 ## Comandos
 
 ```bash
