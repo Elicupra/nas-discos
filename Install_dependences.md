@@ -1,6 +1,7 @@
 # Instalación de dependencias — disk-search (nas_discos.py)
 
-Guía para Ubuntu (probado en Python 3.14, PEP 668).
+Guía para Ubuntu (probado en Python 3.14, PEP 668). El histórico usa
+`sqlite3`, incluido en la biblioteca estándar: no hay dependencias nuevas.
 
 ## Por qué no `sudo pip install`
 
@@ -56,8 +57,9 @@ sudo apt install -y libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 \
 python -c "import requests, bs4, playwright; print('deps OK')"
 
 cd ~/red/repos/disk-search
-python nas_discos.py --demo --once   # prueba la UI sin internet
-python nas_discos.py --debug         # búsqueda real con log por página
+python -m unittest discover -s tests -v   # regresión sin internet
+python nas_discos.py --demo --once       # prueba la UI sin internet
+python nas_discos.py --debug             # búsqueda real con log por página
 ```
 
 ## 5. Uso habitual
@@ -67,7 +69,33 @@ cd ~/red/repos/disk-search
 source ~/.venvs/disk-search/bin/activate
 python nas_discos.py              # servidor en http://localhost:8765
 python nas_discos.py --headed     # si hay captcha, resuélvelo en la ventana
+python nas_discos.py --db /ruta/history.sqlite3
 ```
+
+La interfaz tiene dos pestañas:
+
+- **Resultados:** filtros por formato, capacidad, interfaz, NAS, tienda y
+  favoritos. La tabla se ordena haciendo clic en cualquier cabecera.
+- **Histórico:** modelos vistos, favoritos, precios, última fecha visto y
+  productos que han dejado de aparecer. Los avisos se descartan sin modales.
+
+## 6. Fuentes y restricciones
+
+Fuentes activas: PcComponentes, PcBox, Amazon.es, LDLC, Coolmod y
+Alternate.es. Se consultan páginas de catálogo, con pausas entre peticiones y
+sin intentar evadir captchas. Si una tienda bloquea la petición, se muestra su
+estado y **no** se usa para marcar productos como descatalogados.
+
+## 7. Histórico y PocketBase
+
+- SQLite por defecto en `data/history.sqlite3` (ignorado por git). Si el
+  filesystem no admite bloqueos, como puede ocurrir en CIFS, se usa
+  `~/.local/share/disk-search/history.sqlite3`.
+- Se puede cambiar con `--db` o `DISKSEARCH_DB`.
+- Un producto se marca como no disponible tras dos búsquedas fiables sin
+  encontrarlo; el aviso incluye la fecha y solo se muestra para favoritos.
+- El adaptador futuro de PocketBase está documentado en `POCKETBASE.md` y no
+  se activa por defecto.
 
 ## Notas
 
