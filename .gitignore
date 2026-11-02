@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+nas_discos.html
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.pytest_cache/
+.DS_Store
+*.log

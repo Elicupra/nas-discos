@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discos HDD · comparador</title>
+<style>/*CSS*/</style></head>
+<body><div class="wrap">
+<header>
+  <div>
+    <h1>Discos duros internos</h1>
+    <p class="sub">HDD de 2,5" y 3,5", sin límites de capacidad. Un producto por modelo, con su mejor precio.</p>
+  </div>
+  <div class="head-actions">
+    <button id="re" type="button"><i class="fill" id="fill"></i><span id="relabel">Buscar de nuevo</span></button>
+    <div class="foot" id="rehint"></div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Secciones">
+  <button id="tab-search" class="tab" role="tab" aria-selected="true" aria-controls="view-search">Resultados</button>
+  <button id="tab-history" class="tab" role="tab" aria-selected="false" aria-controls="view-history">Histórico <span id="histbadge" class="badge" hidden></span></button>
+</nav>
+
+<div id="notice" class="notice" hidden></div>
+
+<section id="view-search" role="tabpanel" aria-labelledby="tab-search">
+  <section class="stats" aria-label="Resumen de la búsqueda" id="stats"></section>
+  <section class="srcs" id="srcs" aria-label="Estado de las tiendas"></section>
+  <section class="hl" id="hl" aria-label="Destacados"></section>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Filtrar por marca, modelo o tienda" aria-label="Filtrar resultados">
+    <select id="form" aria-label="Formato"><option value="">Formato: todos</option></select>
+    <input id="capmin" type="number" min="0" step="0.1" placeholder="Cap. mín. TB" aria-label="Capacidad mínima en TB">
+    <input id="capmax" type="number" min="0" step="0.1" placeholder="Cap. máx. TB" aria-label="Capacidad máxima en TB">
+    <select id="iface" aria-label="Interfaz"><option value="">Interfaz: todas</option></select>
+    <select id="nas" aria-label="Gama NAS"><option value="">NAS: todo</option><option value="yes">Solo NAS</option><option value="no">No NAS</option></select>
+    <select id="store" aria-label="Tienda"><option value="">Tienda: todas</option></select>
+    <label class="check"><input id="favonly" type="checkbox"> Solo favoritos</label>
+    <button id="reset" class="ghost" type="button">Limpiar filtros</button>
+  </div>
+  <div class="chips" id="chips" aria-label="Marcas"></div>
+  <div class="tablewrap"><table>
+    <thead><tr>
+      <th class="favcol"><span class="sr">Favorito</span></th>
+      <th data-key="brand"><button class="sort" data-key="brand">Marca</button></th>
+      <th data-key="model"><button class="sort" data-key="model">Modelo</button></th>
+      <th data-key="capacity_gb"><button class="sort" data-key="capacity_gb">Capacidad</button></th>
+      <th data-key="cache" class="num"><button class="sort" data-key="cache">Caché</button></th>
+      <th data-key="form_factor"><button class="sort" data-key="form_factor">Formato</button></th>
+      <th data-key="price" class="num"><button class="sort" data-key="price">Precio</button></th>
+      <th data-key="ppt" class="num"><button class="sort" data-key="ppt">€/TB</button></th>
+      <th data-key="store"><button class="sort" data-key="store">Tienda</button></th>
+      <th>Enlace</th>
+    </tr></thead><tbody id="rows"></tbody>
+  </table></div>
+  <div class="pager" id="pager"></div>
+  <p class="foot" id="foot"></p>
+</section>
+
+<section id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+  <section class="stats" id="hstats" aria-label="Resumen del histórico"></section>
+  <div class="tools">
+    <input id="hq" type="search" placeholder="Buscar en el histórico" aria-label="Buscar en el histórico">
+    <select id="hstatus" aria-label="Estado"><option value="">Estado: todos</option><option value="available">Disponibles</option><option value="missing">No disponibles</option></select>
+    <select id="hsort" aria-label="Ordenar histórico">
+      <option value="last_seen:desc">Última vez visto ↓</option>
+      <option value="last_seen:asc">Última vez visto ↑</option>
+      <option value="best_price:asc">Mejor precio ↑</option>
+      <option value="price:asc">Último precio ↑</option>
+      <option value="capacity_gb:desc">Capacidad ↓</option>
+      <option value="brand:asc">Marca A-Z</option>
+    </select>
+    <label class="check"><input id="hfav" type="checkbox"> Solo favoritos</label>
+  </div>
+  <div class="tablewrap"><table class="history-table">
+    <thead><tr>
+      <th class="favcol"><span class="sr">Favorito</span></th>
+      <th>Marca</th><th>Modelo</th><th>Capacidad</th>
+      <th class="num">Último precio</th><th class="num">Mejor precio</th>
+      <th>Última vez visto</th><th>Estado</th><th>Detalle</th>
+    </tr></thead><tbody id="hrows"></tbody>
+  </table></div>
+  <div class="pager" id="hpager"></div>
+  <p class="foot" id="hfoot"></p>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<p class="foot">Datos orientativos. Los precios y la disponibilidad pueden cambiar. Esta aplicación se ejecuta en local.</p>
+</div>
+<script>
+const LIVE=/*LIVE*/false;
+const DATA=/*DATA*/null;
+const BOOT=/*HISTORY*/null;
+/*JS*/
+</script></body></html>
