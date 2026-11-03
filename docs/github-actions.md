@@ -14,9 +14,10 @@ estática.
 3. Lanza las pruebas sin red del repositorio.
 4. Restaura el histórico SQLite desde la caché de Actions.
 5. Ejecuta `python nas_discos.py --once --debug`.
-6. Guarda el histórico actualizado en la caché.
-7. Sube `nas_discos.html` como artifact descargable (30 días).
-8. Publica el HTML en **GitHub Pages**.
+6. Comprueba que la búsqueda haya devuelto discos; si no, falla y no publica.
+7. Guarda el histórico actualizado en la caché.
+8. Sube `nas_discos.html` como artifact descargable (30 días).
+9. Publica el HTML en **GitHub Pages**.
 
 No usa secretos ni tokens propios: el workflow solo necesita el
 `GITHUB_TOKEN` que GitHub proporciona automáticamente.
@@ -149,6 +150,9 @@ al cron.
   runner propio o un disparador externo.
 - **Modo estático**: en `--once` los favoritos no se guardan. El histórico y
   los avisos sí se generan a partir de la base de datos.
+- **Resultados vacíos**: si la búsqueda no devuelve ningún disco, el workflow
+  falla y no despliega para no sustituir la última página válida por una vacía.
+  El artifact de esa ejecución sí se sube para poder diagnosticar.
 - **Repositorio público**: la página y el artifact son visibles para
   cualquiera. No publiques el repositorio si el histórico contiene datos que
   no quieres exponer.

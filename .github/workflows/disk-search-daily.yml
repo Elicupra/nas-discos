@@ -67,6 +67,28 @@ jobs:
           python nas_discos.py --once --debug
           cp nas_discos.html public/index.html
 
+      - name: Comprobar resultados
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          html = pathlib.Path("nas_discos.html").read_text(encoding="utf-8")
+          match = re.search(r"const DATA=(\{.*?\});\s*\nconst BOOT=", html, re.S)
+          if not match:
+              sys.exit("No se pudo leer el dataset del HTML generado")
+
+          data = json.loads(match.group(1))
+          unique = int(data.get("meta", {}).get("unique", 0))
+          print(f"Discos distintos: {unique}")
+          if unique == 0:
+              sys.exit(
+                  "La búsqueda no devolvió discos; no se publica para no vaciar la página"
+              )
+          PY
+
       - name: Guardar histórico
         if: always() && hashFiles('.cache/disk-search/history.sqlite3') != ''
         uses: actions/cache/save@v4
