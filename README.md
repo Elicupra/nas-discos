@@ -115,6 +115,21 @@ favoritos no se guardan; para eso hace falta el servidor.
 --port N      puerto del servidor (por defecto 8765)
 ```
 
+## Ejecución diaria en GitHub Actions
+
+El repositorio incluye un workflow que ejecuta la búsqueda una vez al día,
+publica `nas_discos.html` en GitHub Pages y deja el HTML como artifact
+descargable. El histórico SQLite se conserva entre ejecuciones mediante la
+caché de Actions, sin commitear datos al repositorio.
+
+Consulta [`docs/github-actions.md`](docs/github-actions.md) para activar Pages,
+lanzar la primera ejecución y revisar las limitaciones. En local puedes
+reproducir el mismo flujo con:
+
+```bash
+scripts/daily.sh
+```
+
 ## Histórico
 
 El histórico se guarda en SQLite:
@@ -139,6 +154,9 @@ Los avisos aparecen en la propia interfaz y se pueden descartar sin modales.
 
 ```text
 nas_discos.py              entrada CLI compatible
+.github/workflows/         búsqueda diaria y publicación en Pages
+docs/                      documentación de despliegue
+scripts/                   utilidades de ejecución local
 disksearch/
   config.py                fuentes, límites de red y rutas
   parsing.py               precios, capacidades, formatos y claves canónicas
@@ -200,5 +218,7 @@ python nas_discos.py --demo --no-open
 
 - [`Install_dependences.md`](Install_dependences.md): instalación detallada y
   resolución de problemas.
+- [`docs/github-actions.md`](docs/github-actions.md): búsqueda diaria y
+  publicación en GitHub Pages.
 - [`AGENTS.md`](AGENTS.md): flujo de trabajo, estructura y reglas del proyecto.
 - [`POCKETBASE.md`](POCKETBASE.md): esquema e interfaz del adaptador futuro.

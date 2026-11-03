@@ -79,6 +79,9 @@ python nas_discos.py --demo --once
 # servidor real
 python nas_discos.py
 
+# búsqueda diaria en local (igual que el workflow de GitHub Actions)
+scripts/daily.sh
+
 # tests
 python -m unittest discover -s tests -v
 ```
@@ -110,6 +113,10 @@ python -m unittest discover -s tests -v
 - `disksearch/history.py`: interfaz de histórico + SQLite.
 - `disksearch/server.py`: servidor HTTP/API.
 - `disksearch/web/`: UI (HTML, CSS y JS).
+- `.github/workflows/disk-search-daily.yml`: búsqueda diaria y publicación en
+  Pages.
+- `docs/github-actions.md`: activación, histórico en caché y limitaciones.
+- `scripts/daily.sh`: reproducción local del flujo diario.
 - `tests/`: pruebas de regresión sin red.
 
 ## Reglas de scraping
