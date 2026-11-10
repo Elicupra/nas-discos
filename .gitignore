@@ -9,6 +9,9 @@ public/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+# Histórico en la rama state (excepción a *.sqlite3)
+!state/history.sqlite3
 .pytest_cache/
 .DS_Store
 *.log
+docs/plans/

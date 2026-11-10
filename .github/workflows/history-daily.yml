@@ -1,0 +1,121 @@
+name: Histórico diario de precios
+
+on:
+  schedule:
+    # 06:00 UTC ≈ 07:00 en invierno y 08:00 en verano (hora de Madrid).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: disksearch-history
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+  DISKSEARCH_DB: ${{ github.workspace }}/.cache/disk-search/history.sqlite3
+
+jobs:
+  history:
+    name: Registrar histórico diario
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Restaurar histórico de la rama state
+        run: |
+          mkdir -p .cache/disk-search
+          git fetch origin state || echo "Sin rama state: se empieza un histórico nuevo"
+          if git cat-file -e "origin/state:state/history.sqlite3" 2>/dev/null; then
+            git checkout origin/state -- state/history.sqlite3
+            mkdir -p .cache/disk-search
+            mv state/history.sqlite3 .cache/disk-search/history.sqlite3
+            echo "Histórico restaurado desde la rama state"
+          else
+            echo "No hay histórico previo; se crea un SQLite nuevo"
+          fi
+
+      - name: Buscar discos
+        run: python nas_discos.py --once --debug
+
+      - name: Comprobar resultados
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          html = pathlib.Path("nas_discos.html").read_text(encoding="utf-8")
+          match = re.search(r"const DATA=(\{.*?\});\s*\nconst BOOT=", html, re.S)
+          if not match:
+              sys.exit("No se pudo leer el dataset del HTML generado")
+
+          data = json.loads(match.group(1))
+          unique = int(data.get("meta", {}).get("unique", 0))
+          print(f"Discos distintos: {unique}")
+          if unique == 0:
+              sys.exit(
+                  "La búsqueda no devolvió discos; no se registra el histórico"
+              )
+          PY
+
+      - name: Copiar HTML para el artifact
+        if: always()
+        run: |
+          mkdir -p public
+          cp nas_discos.html public/index.html
+
+      - name: Guardar histórico en la rama state
+        if: success()
+        run: |
+          git config user.name "disksearch-bot"
+          git config user.email "actions@github.com"
+          mkdir -p state
+          cp .cache/disk-search/history.sqlite3 state/history.sqlite3
+          if git show-ref --verify --quiet refs/remotes/origin/state; then
+            git checkout -B state origin/state
+          else
+            git checkout -B state
+          fi
+          git add state/history.sqlite3
+          if git diff --cached --quiet; then
+            echo "El histórico no ha cambiado; no se hace commit"
+          else
+            N_DISCOS=$(grep -oE '"unique": *[0-9]+' nas_discos.html | head -1 | grep -oE '[0-9]+')
+            git commit -m "history: $(date -u +%F) (${N_DISCOS:-?} discos)"
+            git push origin state
+          fi
+
+      - name: Subir artifact de diagnóstico
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nas-discos-${{ github.run_number }}
+          path: |
+            public/index.html
+            .cache/disk-search/history.sqlite3
+          if-no-files-found: warn
+          retention-days: 30
