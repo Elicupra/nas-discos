@@ -1,8 +1,53 @@
 # Ejecución diaria en GitHub Actions
 
-El repositorio incluye un workflow que ejecuta la búsqueda una vez al día,
-guarda el histórico entre ejecuciones y publica el resultado como página
-estática.
+## Histórico diario en la rama `state` (workflow `history-daily.yml`)
+
+`.github/workflows/history-daily.yml` ejecuta la búsqueda una vez al día
+(06:00 UTC) y su único cometido es **acumular el histórico de precios en un
+SQLite persistente**:
+
+1. Instala Python, las dependencias y Chromium de Playwright.
+2. Lanza las pruebas sin red del repositorio.
+3. Restaura `state/history.sqlite3` desde la rama `state` (si existe; si no,
+   empieza un histórico nuevo).
+4. Ejecuta `python nas_discos.py --once --debug`.
+5. Comprueba que la búsqueda haya devuelto discos; si no, **falla y no
+   commitea**, para que un bloqueo anti-bot nunca corrompa el histórico.
+6. Hace commit del SQLite actualizado en la rama `state` con un mensaje como
+   `history: 2026-11-10 (107 discos)` y lo publica con push. Si el SQLite no
+   ha cambiado, no commitea.
+7. Sube un artifact de diagnóstico con el HTML y el SQLite de esa corrida
+   (30 días).
+
+No usa secretos: solo necesita el `GITHUB_TOKEN` con `contents: write`.
+
+### Restaurar el histórico en local
+
+Para trabajar con el histórico acumulado en tu equipo:
+
+```bash
+git fetch origin state
+git show origin/state:state/history.sqlite3 > historico.sqlite3
+DISKSEARCH_DB="$PWD/historico.sqlite3" python nas_discos.py
+```
+
+Para eliminar el histórico y empezar de cero, borra la rama `state`
+(`git push origin --delete state`); la siguiente ejecución creará una nueva.
+
+### Limitaciones
+
+- El historial de `main` no se toca: el SQLite vive solo en la rama `state`.
+- Si dos ejecuciones se solapan, la concurrencia del workflow (`group:
+  disksearch-history`, sin cancelación) hace que esperen; el commit usa la
+  rama remota como base.
+- El anti-bot y el cron impreciso aplican igual que al resto de workflows.
+
+## Publicación en GitHub Pages (workflow `disk-search-daily.yml`)
+
+El repositorio también incluye un workflow que ejecuta la búsqueda una vez al
+día, publica `nas_discos.html` en GitHub Pages y deja el HTML como artifact
+descargable. El histórico SQLite se conserva entre ejecuciones mediante la
+caché de Actions, sin commitear datos al repositorio.
 
 ## Qué hace
 

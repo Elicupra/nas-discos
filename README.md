@@ -140,6 +140,16 @@ El histórico se guarda en SQLite:
   automáticamente `~/.local/share/disk-search/history.sqlite3`.
 - La carpeta de datos se puede cambiar con `DISKSEARCH_DATA_DIR`.
 
+### Histórico diario en GitHub Actions
+
+Además del histórico local, el workflow
+`.github/workflows/history-daily.yml` ejecuta la búsqueda una vez al día y
+guarda el SQLite en la rama `state` del repositorio (`state/history.sqlite3`),
+de forma que el histórico de precios sobrevive entre ejecuciones y no depende
+de la caché de Actions. Consulta
+[`docs/github-actions.md`](docs/github-actions.md) para saber cómo
+restaurarlo en local.
+
 Se guardan todos los modelos vistos, no solo los favoritos. Los favoritos se
 marcan desde la tabla y sirven para:
 

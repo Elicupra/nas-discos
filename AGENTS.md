@@ -136,5 +136,8 @@ python -m unittest discover -s tests -v
 - Favoritos manuales; todo modelo visto se guarda.
 - Un producto se marca no disponible tras **2 ausencias fiables**.
 - Los avisos no intrusivos se muestran solo para favoritos.
+- Histórico diario en GitHub Actions: el workflow
+  `.github/workflows/history-daily.yml` acumula el SQLite en la rama
+  `state` (commit diario). Ver `docs/github-actions.md`.
 - PocketBase es un adaptador futuro documentado en `POCKETBASE.md`; no se
   activa por defecto.
