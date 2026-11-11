@@ -150,6 +150,39 @@ de la caché de Actions. Consulta
 [`docs/github-actions.md`](docs/github-actions.md) para saber cómo
 restaurarlo en local.
 
+### Ver el histórico acumulado
+
+**Opción 1 — En tu equipo con la interfaz completa (recomendada):**
+
+```bash
+git fetch origin state
+git show origin/state:state/history.sqlite3 > /tmp/opencode/historico.sqlite3
+source ~/.venvs/disk-search/bin/activate
+DISKSEARCH_DB=/tmp/opencode/historico.sqlite3 python nas_discos.py
+```
+
+Abre `http://localhost:8765`: la vista de Histórico muestra fechas, precios
+por tienda y ofertas de los días acumulados. Usa siempre una copia del SQLite
+(no lo apuntes a `data/history.sqlite3`) para no mezclarlo con tu histórico
+local.
+
+**Opción 2 — Descargar el SQLite desde GitHub:**
+
+En **Actions → Histórico diario de precios → ejecución → Artifacts** está
+`nas-discos-<n>`, que incluye `history.sqlite3` de esa corrida.
+
+**Opción 3 — Consulta rápida por terminal:**
+
+```bash
+git show origin/state:state/history.sqlite3 > /tmp/h.sqlite3
+sqlite3 /tmp/h.sqlite3 ".schema"
+sqlite3 /tmp/h.sqlite3 "SELECT * FROM prices ORDER BY date DESC LIMIT 20;"
+```
+
+Cada día, el commit `history: <fecha> (N discos)` en la rama `state` añade el
+registro diario; con varias fechas acumuladas, la interfaz muestra la
+evolución de precios y los avisos de productos desaparecidos.
+
 Se guardan todos los modelos vistos, no solo los favoritos. Los favoritos se
 marcan desde la tabla y sirven para:
 
