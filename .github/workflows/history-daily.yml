@@ -39,7 +39,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
+
+      # Los runners a veces fallan al resolver los mirrors de Ubuntu.
+      # Reintentamos hasta 3 veces con pausa antes de rendirnos.
+      - name: Instalar navegador
+        run: |
+          for i in 1 2 3; do
+            if python -m playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Intento $i fallido; reintentando en 30 s..."
+            sleep 30
+          done
+          exit 1
 
       - name: Ejecutar pruebas
         run: python -m unittest discover -s tests -v
@@ -86,7 +98,11 @@ jobs:
         if: always()
         run: |
           mkdir -p public
-          cp nas_discos.html public/index.html
+          if [ -f nas_discos.html ]; then
+            cp nas_discos.html public/index.html
+          else
+            echo "No hay HTML (la búsqueda no llegó a ejecutarse)"
+          fi
 
       - name: Guardar histórico en la rama state
         if: success()
