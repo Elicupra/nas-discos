@@ -20,8 +20,8 @@ env:
 jobs:
   history:
     name: Registrar histórico diario
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -40,18 +40,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Los runners a veces fallan al resolver los mirrors de Ubuntu.
-      # Reintentamos hasta 3 veces con pausa antes de rendirnos.
+      # Cachear los binarios de Playwright evita descargar ~300 MB cada día.
+      # La clave depende de la versión de playwright en requirements.txt.
+      # Bench local (docs/plans/SPEC_7.md): frío completo 29 s / --only-shell
+      # 18 s / cálido 15 s (red local; en el runner el ahorro es mayor).
+      - name: Restaurar caché de navegadores
+        id: browser-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      # El scraping solo usa chromium-headless-shell (modo headless).
+      # --only-shell descarga ~130 MB en vez de ~300 MB.
       - name: Instalar navegador
         run: |
           for i in 1 2 3; do
-            if python -m playwright install --with-deps chromium; then
+            if python -m playwright install --with-deps chromium --only-shell; then
               exit 0
             fi
             echo "Intento $i fallido; reintentando en 30 s..."
             sleep 30
           done
           exit 1
+
+      - name: Guardar caché de navegadores
+        if: always() && steps.browser-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Ejecutar pruebas
         run: python -m unittest discover -s tests -v
@@ -70,7 +88,10 @@ jobs:
           fi
 
       - name: Buscar discos
-        run: python nas_discos.py --once --debug
+        run: |
+          SECONDS=0
+          python nas_discos.py --once --debug
+          echo "Duración de la búsqueda: ${SECONDS}s"
 
       - name: Comprobar resultados
         run: |
