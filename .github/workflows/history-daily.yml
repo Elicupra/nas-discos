@@ -150,6 +150,35 @@ jobs:
         if: success()
         run: python nas_discos.py --historico-html public/historico.html
 
+      # Opción B del issue #7: publicar el histórico en el repo público
+      # Elicupra/nas-discos-pages con Pages activo (PAGES_TOKEN en Secrets).
+      # El artifact se mantiene como copia de seguridad (decisión A).
+      - name: Publicar en nas-discos-pages
+        if: success()
+        run: |
+          if [ -z "$PAGES_TOKEN" ]; then
+            echo "PAGES_TOKEN no configurado; no se publica en Pages"
+            exit 0
+          fi
+          if [ ! -f public/historico.html ]; then
+            echo "No hay historico.html; no se publica"
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${PAGES_TOKEN}@github.com/Elicupra/nas-discos-pages.git" pages-repo
+          cp public/historico.html pages-repo/index.html
+          cd pages-repo
+          git config user.name "disksearch-bot"
+          git config user.email "actions@github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "El histórico publicado no ha cambiado; no se hace commit"
+          else
+            git commit -m "history: $(date -u +%F)"
+            git push origin main
+          fi
+        env:
+          PAGES_TOKEN: ${{ secrets.PAGES_TOKEN }}
+
       - name: Subir artifact de diagnóstico
         if: always()
         uses: actions/upload-artifact@v4
