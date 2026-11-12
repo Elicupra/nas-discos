@@ -87,6 +87,17 @@ td a{color:var(--acc);font-weight:600;text-decoration:none}td a:hover{text-decor
 .bar-row .bar{height:16px;border-radius:8px;background:var(--bar);overflow:hidden;display:block}
 .bar-row .bar u{display:block;height:100%;background:var(--acc)}
 .bar-row .num{text-align:right}
+.detail-box{padding:10px 2px 4px}
+.pstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:6px 0}
+.pstat{background:color-mix(in srgb,var(--acc) 5%,transparent);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.pstat small{display:block;color:var(--mute);font-size:12px}
+.pstat b{display:block;font-size:20px;letter-spacing:-.01em}
+.pstat span{color:var(--mute);font-size:12px}
+.compare-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 10px}
+.compare-row label{color:var(--mute);font-size:13px}
+.compare-row select{max-width:340px}
+.bar-set{margin:8px 0}
+.detail-row svg text{font-family:inherit}
 .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:720px){.head-actions{text-align:left}.tabs{overflow-x:auto}.notice{align-items:flex-start;flex-direction:column}}

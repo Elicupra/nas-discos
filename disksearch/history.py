@@ -475,6 +475,14 @@ class HistoryStore:
                    ORDER BY day""",
                 (cutoff,),
             ).fetchall()
+            records = conn.execute(
+                """SELECT product_key, substr(observed_at, 1, 10) AS day,
+                          store, price
+                   FROM price_history
+                   WHERE observed_at >= ? AND available = 1
+                   ORDER BY observed_at ASC""",
+                (cutoff,),
+            ).fetchall()
             stores = conn.execute(
                 """SELECT product_key, store, last_price AS price, last_seen
                    FROM offers
@@ -485,6 +493,11 @@ class HistoryStore:
         for row in points:
             by_product.setdefault(row["product_key"], []).append(
                 {"day": row["day"], "price": row["price"]}
+            )
+        records_by_product = {}
+        for row in records:
+            records_by_product.setdefault(row["product_key"], []).append(
+                {"day": row["day"], "store": row["store"], "price": row["price"]}
             )
         stores_by_product = {}
         for row in stores:
@@ -508,6 +521,7 @@ class HistoryStore:
                     "last_price": row["last_price"],
                     "best_price": row["best_price"],
                     "points": by_product.get(key, []),
+                    "records": records_by_product.get(key, [])[-200:],
                     "stores": stores_by_product.get(key, {}),
                 }
             )
