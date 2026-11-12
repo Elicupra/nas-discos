@@ -387,7 +387,7 @@ class HistoryStore:
             )]
 
     def list_products(self, favorites=False, q="", status="", limit=50,
-                      offset=0, sort="last_seen", direction="desc"):
+                      offset=0, sort="last_seen", direction="desc", kind=""):
         limit = max(1, min(int(limit or 50), 200))
         offset = max(0, int(offset or 0))
         where, params = [], []
@@ -396,6 +396,9 @@ class HistoryStore:
         if q:
             where.append("(p.brand LIKE ? OR p.model LIKE ? OR p.title LIKE ?)")
             params += [f"%{q}%"] * 3
+        if kind in ("HDD", "SSD"):
+            where.append("p.kind=?")
+            params.append(kind)
         if status == "available":
             where.append("p.available=1")
         elif status == "missing":
@@ -516,6 +519,7 @@ class HistoryStore:
                     "model": row["model"],
                     "capacity_gb": row["capacity_gb"],
                     "form_factor": row["form_factor"],
+                    "kind": row["kind"],
                     "favorite": bool(row["favorite"]),
                     "available": bool(row["available"]),
                     "last_price": row["last_price"],
@@ -530,7 +534,7 @@ class HistoryStore:
     def _product_rows(self):
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT key, brand, model, capacity_gb, form_factor,
+                """SELECT key, brand, model, capacity_gb, form_factor, kind,
                           favorite, available, last_price, best_price
                    FROM products"""
             ).fetchall()
