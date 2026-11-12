@@ -26,6 +26,12 @@ telemetría. Solo se consultan las páginas públicas de catálogo de las tienda
   tiendas bloqueadas o con errores no cuentan como ausencia.
 - Interfaz web local y también modo estático (`nas_discos.html`) para abrirlo
   sin servidor.
+- La portada de la interfaz es el **Histórico**; la búsqueda se lanza a mano
+  con el botón «Buscar», que muestra un panel de progreso por tienda en
+  tiempo real y al acabar lleva a Resultados.
+- Vistas de histórico por producto (tabla con máximos, medios, mínimos,
+  precios actuales y variaciones; gráfica de línea; barras por día, tienda o
+  producto) con comparativa entre productos.
 - Código preparado para añadir SSD, NVMe y discos externos en el futuro, y un
   adaptador documentado para PocketBase.
 
@@ -81,8 +87,10 @@ source ~/.venvs/disk-search/bin/activate
 python nas_discos.py
 ```
 
-Abre `http://localhost:8765`. La primera búsqueda se lanza automáticamente y
-puedes repetirla desde la interfaz cuando pase el tiempo de espera.
+Abre `http://localhost:8765`. La portada es el **Histórico**; la búsqueda no se
+lanza sola: pulsa «Buscar» y verás un panel con el progreso de cada tienda.
+Al terminar saltas a Resultados y puedes repetir la búsqueda cuando pase el
+tiempo de espera (cooldown).
 
 ### Datos de ejemplo, sin internet
 
@@ -235,13 +243,14 @@ El servidor expone una API sencilla en `127.0.0.1`:
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/api/status` | Estado de la búsqueda y tiempo de espera |
+| `GET` | `/api/status` | Estado de la búsqueda, progreso por tienda y tiempo de espera |
 | `GET` | `/api/data` | Resultados actuales y favoritos |
 | `GET` | `/api/history` | Histórico paginado y filtrable |
 | `GET` | `/api/history/<key>` | Detalle de un producto |
 | `GET` | `/api/notifications` | Avisos activos |
 | `GET` | `/api/stats` | Totales del histórico |
 | `GET` | `/api/searches` | Búsquedas recientes |
+| `GET` | `/api/series` | Serie diaria de precios por producto (gráficas) |
 | `POST` | `/api/refresh` | Inicia una nueva búsqueda |
 | `POST` | `/api/favorites` | Marca o desmarca un favorito |
 | `POST` | `/api/notifications/dismiss` | Descarta un aviso |

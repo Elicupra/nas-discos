@@ -22,19 +22,19 @@
       <button type="button" class="chip" data-theme-opt="light" aria-pressed="false" title="Modo claro">Claro</button>
       <button type="button" class="chip" data-theme-opt="dark" aria-pressed="false" title="Modo oscuro">Oscuro</button>
     </div>
-    <button id="re" type="button"><i class="fill" id="fill"></i><span id="relabel">Buscar de nuevo</span></button>
+    <button id="re" type="button"><i class="fill" id="fill"></i><span id="relabel">Buscar</span></button>
     <div class="foot" id="rehint"></div>
   </div>
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Secciones">
-  <button id="tab-search" class="tab" role="tab" aria-selected="true" aria-controls="view-search">Resultados</button>
-  <button id="tab-history" class="tab" role="tab" aria-selected="false" aria-controls="view-history">Histórico <span id="histbadge" class="badge" hidden></span></button>
+  <button id="tab-search" class="tab" role="tab" aria-selected="false" aria-controls="view-search">Resultados</button>
+  <button id="tab-history" class="tab" role="tab" aria-selected="true" aria-controls="view-history">Histórico <span id="histbadge" class="badge" hidden></span></button>
 </nav>
 
 <div id="notice" class="notice" hidden></div>
 
-<section id="view-search" role="tabpanel" aria-labelledby="tab-search">
+<section id="view-search" role="tabpanel" aria-labelledby="tab-search" hidden>
   <section class="stats" aria-label="Resumen de la búsqueda" id="stats"></section>
   <section class="srcs" id="srcs" aria-label="Estado de las tiendas"></section>
   <section class="hl" id="hl" aria-label="Destacados"></section>
@@ -68,7 +68,7 @@
   <p class="foot" id="foot"></p>
 </section>
 
-<section id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+<section id="view-history" role="tabpanel" aria-labelledby="tab-history">
   <section class="stats" id="hstats" aria-label="Resumen del histórico"></section>
   <div class="tools">
     <input id="hq" type="search" placeholder="Buscar en el histórico" aria-label="Buscar en el histórico">
@@ -105,6 +105,15 @@
 </section>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<div id="searchmodal" class="modal" hidden role="dialog" aria-modal="true" aria-label="Progreso de la búsqueda">
+  <div class="modal-box">
+    <h3>Buscando discos…</h3>
+    <p class="foot" id="slabel">Preparando la búsqueda…</p>
+    <div id="srows" aria-label="Tiendas en curso"></div>
+    <p class="foot">La búsqueda respeta las pausas anti-bot; puede tardar unos minutos.</p>
+  </div>
+</div>
 <p class="foot">Datos orientativos. Los precios y la disponibilidad pueden cambiar. Esta aplicación se ejecuta en local.</p>
 </div>
 <script>

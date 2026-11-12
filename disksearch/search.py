@@ -99,6 +99,8 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
             ok_pages = items = 0
             note = ""
             blocked_any = failed_any = pagination_ignored = False
+            progress(done / steps, f"{source['name']} · empezando", source["name"],
+                     {"state": "buscando", "results": None})
             try:
                 blocks = source_blocks(source)
                 for block_index, urls in enumerate(blocks, 1):
@@ -106,6 +108,7 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                         progress(
                             done / steps,
                             f"{source['name']} · {block_index}/{len(blocks)} · {page_index}/{len(urls)}",
+                            source["name"],
                         )
                         done += 1
                         if source["mode"] == "browser":
@@ -190,6 +193,19 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                     and not blocked_any and not failed_any and not pagination_ignored
                 ),
             })
+            final = per_source[-1]
+            if final["ok"]:
+                state = "ok"
+            elif blocked_any:
+                state = "bloqueada"
+            elif failed_any or not ok_pages:
+                state = "fallida"
+            else:
+                state = "sin resultados"
+            progress(
+                done / steps, f"{source['name']} · {state}",
+                source["name"], {"state": state, "results": items},
+            )
     finally:
         if context:
             context.close()
