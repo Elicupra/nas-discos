@@ -64,6 +64,22 @@ SOURCES = [
         ],
     },
     {
+        "name": "Geeknetic · agregado",
+        "mode": "http",
+        "extract": "geeknetic",
+        # Es un comparador, no una tienda: sus precios son «desde» y solo se
+        # usan como respaldo/descubrimiento. robots.txt permite /comparador-precios/
+        # salvo */ver-tienda, que no se sigue.
+        "aggregator": True,
+        "full_page_items": 42,
+        "urls": [
+            {"url": "https://www.geeknetic.es/comparador-precios/discos-duros/", "pages": 1},
+            {"url": "https://www.geeknetic.es/comparador-precios/discos-duros/{page}/", "pages": 11},
+            {"url": "https://www.geeknetic.es/comparador-precios/ssds/", "pages": 1},
+            {"url": "https://www.geeknetic.es/comparador-precios/ssds/{page}/", "pages": 24},
+        ],
+    },
+    {
         "name": "Alternate.es",
         "mode": "http",
         "extract": "alternate",

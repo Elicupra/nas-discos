@@ -54,8 +54,8 @@ def _dedupe(items):
     return out
 
 
-def _product(name, price, url, store, brand="", rating=None, reviews=0):
-    return {
+def _product(name, price, url, store, brand="", rating=None, reviews=0, **extra):
+    item = {
         "name": re.sub(r"\s+", " ", str(name or "")).strip(),
         "brand": brand or "",
         "price": price,
@@ -64,6 +64,8 @@ def _product(name, price, url, store, brand="", rating=None, reviews=0):
         "reviews": reviews or 0,
         "store": store,
     }
+    item.update(extra)
+    return item
 
 
 def extract_products(html, base_url, store):
@@ -240,6 +242,115 @@ def extract_alternate(html, base_url, store):
                 break
         out.append(_product(
             name, price, normalize_url(card.get("href", ""), base_url), store
+        ))
+    return _dedupe(out)
+
+
+_SSD_TITLE_RE = re.compile(r"\bssd\b|\bnvme\b|\bm\.?\s?2\b|\bmsata\b", re.I)
+
+
+def _geek_form(value):
+    low = (value or "").lower().replace(",", ".")
+    if "m.2" in low:
+        return "M.2"
+    if "msata" in low:
+        return "mSATA"
+    match = re.search(r"\b(2\.5|3\.5)\b", low)
+    return match.group(1) if match else None
+
+
+def _geek_interface(value):
+    low = (value or "").lower()
+    if "nvme" in low:
+        return "NVMe"
+    if "pcie" in low:
+        return "PCIe"
+    if "sata" in low:
+        return "SATA"
+    if "sas" in low:
+        return "SAS"
+    return None
+
+
+def _geek_interface_from_title(title, label_value):
+    """La ficha SSD no incluye interfaz; inferimos del título."""
+    low = (title or "").lower()
+    if "nvme" in low or "pcie" in low:
+        return "NVMe"
+    if "sas" in low:
+        return "SAS"
+    return _geek_interface(label_value)
+
+
+def _geek_brand(name):
+    """Marca cuando el título solo trae la línea o el número de parte."""
+    low = name.lower()
+    if re.search(r"\bwd\b|ultrastar", low):
+        return "Western Digital"
+    if re.search(r"\bhdw[a-z0-9]|\bn300\b|\bmg\d{2}\b", low):
+        return "Toshiba"
+    return ""
+
+
+def extract_geeknetic(html, base_url, store):
+    """Agregador Geeknetic: tarjetas con specs y precio «desde».
+
+    Solo se leen las listas del comparador. No se siguen los enlaces de
+    afiliado ``ver-tienda`` ni se piden las fichas de cada producto.
+    """
+    from bs4 import BeautifulSoup
+    from .parsing import parse_capacity_gb
+
+    soup = BeautifulSoup(html, "html.parser")
+    page_kind = "SSD" if re.search(r"/ssds?/", base_url, re.I) else "HDD"
+    out = []
+    for card in soup.select("article.product"):
+        title_node = card.select_one(".product-title a") or card.select_one(".product-title")
+        if not title_node:
+            continue
+        name = title_node.get_text(" ", strip=True)
+        if not name:
+            continue
+
+        labels = {}
+        for spec in card.select(".product-spec span"):
+            text = spec.get_text(" ", strip=True)
+            if ":" in text:
+                label, value = text.split(":", 1)
+                labels[label.strip().lower()] = value.strip()
+
+        hints = {"kind": page_kind}
+        capacity = parse_capacity_gb(labels.get("capacidad", ""))
+        if capacity:
+            hints["capacity_gb"] = capacity
+        form = _geek_form(labels.get("formato") or labels.get("tamaño") or "")
+        if form:
+            hints["form_factor"] = form
+        interface = _geek_interface_from_title(
+            name, labels.get("tipo de interfaz", "")
+        )
+        if interface:
+            hints["interface"] = interface
+        # La categoría manda, salvo que la propia tarjeta diga claramente SSD.
+        if "formato" in labels or _SSD_TITLE_RE.search(name):
+            hints["kind"] = "SSD"
+
+        price_node = card.select_one(".product-price-amount") or card.select_one(".product-price")
+        price = parse_money(price_node.get_text(" ", strip=True)) if price_node else None
+
+        offers = 0
+        button = card.select_one(".product-button")
+        if button:
+            match = re.search(r"(\d+)\s*ofertas?", button.get_text(" ", strip=True), re.I)
+            offers = int(match.group(1)) if match else 0
+
+        link = card.select_one("a.product-img[href]") or card.select_one(".product-title a[href]")
+        href = link.get("href", "") if link else ""
+        if "ver-tienda" in href:
+            href = ""
+        out.append(_product(
+            name, price, normalize_url(href, base_url), store,
+            _geek_brand(name), hints=hints, offers_count=offers,
         ))
     return _dedupe(out)
 
