@@ -14,7 +14,7 @@ def _json_for_script(value) -> str:
 def history_snapshot(store, limit=25) -> dict:
     """Instantánea para el arranque y para el modo --once."""
     if store is None:
-        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": []}
+        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": [], "series": []}
     try:
         listing = store.list_products(limit=limit, offset=0, sort="last_seen", direction="desc")
         return {
@@ -23,9 +23,25 @@ def history_snapshot(store, limit=25) -> dict:
             "stats": store.stats(),
             "notifications": store.notifications(),
             "favorites": store.favorites(),
+            "series": store.price_series(),
         }
     except Exception:
-        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": []}
+        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": [], "series": []}
+
+
+def render_history_html(store) -> str:
+    """Página estática solo con el histórico (para el artifact del workflow).
+
+    Reutiliza la misma UI y estilos que ``nas_discos.html``, pero sin dataset
+    de búsqueda: al abrir el histórico pestaña muestra los datos embebidos.
+    No incluye favoritos ajenos al usuario ni datos personales.
+    """
+    empty = {
+        "meta": {"time": "—", "pages": 0, "raw": 0, "unique": 0, "shown": 0, "sources": []},
+        "items": [],
+        "highlights": {},
+    }
+    return render_html(empty, False, history_snapshot(store, limit=200))
 
 
 def render_html(data, live, history=None) -> str:

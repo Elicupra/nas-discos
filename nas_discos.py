@@ -27,7 +27,7 @@ from disksearch.search import (  # noqa: F401
     build_dataset, demo_dataset, highlights, run_search,
 )
 from disksearch.server import build_store, serve
-from disksearch.ui import history_snapshot, render_html
+from disksearch.ui import history_snapshot, render_history_html, render_html
 
 
 def main():
@@ -40,6 +40,8 @@ def main():
     parser.add_argument("--headed", action="store_true", help="navegador visible (anti-bot)")
     parser.add_argument("--no-open", action="store_true", help="no abrir el navegador")
     parser.add_argument("--db", help="ruta de la base SQLite del histórico")
+    parser.add_argument("--historico-html", nargs="?", const="historico.html", default=None,
+                        help="genera una página estática con el histórico y sale (opcional: ruta de salida)")
     parser.add_argument("--port", type=int, default=None, help=f"puerto (por defecto {config.PORT})")
     args = parser.parse_args()
 
@@ -60,6 +62,17 @@ def main():
             with open("nas_discos.html", "w", encoding="utf-8") as output:
                 output.write(html)
             print(f"OK: nas_discos.html ({data['meta']['unique']} discos distintos)")
+        finally:
+            store.close()
+        return
+
+    if args.historico_html:
+        try:
+            html = render_history_html(store)
+            with open(args.historico_html, "w", encoding="utf-8") as output:
+                output.write(html)
+            snapshot = history_snapshot(store, limit=200)
+            print(f"OK: {args.historico_html} ({snapshot.get('total', 0)} modelos en el histórico)")
         finally:
             store.close()
         return

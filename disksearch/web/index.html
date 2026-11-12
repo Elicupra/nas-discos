@@ -2,6 +2,13 @@
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Discos HDD · comparador</title>
+<script>
+(function(){try{
+  var t=localStorage.getItem('disksearch-theme')||'system';
+  if(t==='system')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  document.documentElement.dataset.theme=t;
+}catch(e){document.documentElement.dataset.theme='light';}})();
+</script>
 <style>/*CSS*/</style></head>
 <body><div class="wrap">
 <header>
@@ -10,6 +17,11 @@
     <p class="sub">HDD de 2,5" y 3,5", sin límites de capacidad. Un producto por modelo, con su mejor precio.</p>
   </div>
   <div class="head-actions">
+    <div class="theme" role="group" aria-label="Tema">
+      <button type="button" class="chip" data-theme-opt="system" aria-pressed="true" title="Seguir el tema del sistema">Sistema</button>
+      <button type="button" class="chip" data-theme-opt="light" aria-pressed="false" title="Modo claro">Claro</button>
+      <button type="button" class="chip" data-theme-opt="dark" aria-pressed="false" title="Modo oscuro">Oscuro</button>
+    </div>
     <button id="re" type="button"><i class="fill" id="fill"></i><span id="relabel">Buscar de nuevo</span></button>
     <div class="foot" id="rehint"></div>
   </div>
@@ -58,8 +70,18 @@
 
 <section id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden>
   <section class="stats" id="hstats" aria-label="Resumen del histórico"></section>
+  <div class="chips" id="hviews" role="group" aria-label="Vista del histórico">
+    <button type="button" class="chip" data-hview="table" aria-pressed="true">Tabla</button>
+    <button type="button" class="chip" data-hview="line" aria-pressed="false">Línea</button>
+    <button type="button" class="chip" data-hview="bars" aria-pressed="false">Barras</button>
+  </div>
   <div class="tools">
     <input id="hq" type="search" placeholder="Buscar en el histórico" aria-label="Buscar en el histórico">
+    <input id="hfrom" type="date" aria-label="Desde fecha" title="Desde">
+    <input id="hto" type="date" aria-label="Hasta fecha" title="Hasta">
+    <input id="hpmin" type="number" min="0" step="1" placeholder="Precio mín. €" aria-label="Precio mínimo">
+    <input id="hpmax" type="number" min="0" step="1" placeholder="Precio máx. €" aria-label="Precio máximo">
+    <select id="hform" aria-label="Formato"><option value="">Formato: todos</option></select>
     <select id="hstatus" aria-label="Estado"><option value="">Estado: todos</option><option value="available">Disponibles</option><option value="missing">No disponibles</option></select>
     <select id="hsort" aria-label="Ordenar histórico">
       <option value="last_seen:desc">Última vez visto ↓</option>
@@ -69,14 +91,19 @@
       <option value="capacity_gb:desc">Capacidad ↓</option>
       <option value="brand:asc">Marca A-Z</option>
     </select>
+    <label class="check"><input id="hchange" type="checkbox"> Solo con variación</label>
     <label class="check"><input id="hfav" type="checkbox"> Solo favoritos</label>
+    <button id="hreset" class="ghost" type="button">Limpiar filtros</button>
   </div>
-  <div class="tablewrap"><table class="history-table">
+  <div class="chips" id="hchips" aria-label="Tiendas del histórico"></div>
+  <div id="hline" hidden><svg id="hchart" role="img" aria-label="Evolución de precios" style="width:100%;height:360px"></svg></div>
+  <div id="hbars" hidden></div>
+  <div class="tablewrap" id="htable"><table class="history-table">
     <thead><tr>
       <th class="favcol"><span class="sr">Favorito</span></th>
       <th>Marca</th><th>Modelo</th><th>Capacidad</th>
       <th class="num">Último precio</th><th class="num">Mejor precio</th>
-      <th>Última vez visto</th><th>Estado</th><th>Detalle</th>
+      <th>Última vez visto</th><th>Estado</th><th>Enlace</th><th>Detalle</th>
     </tr></thead><tbody id="hrows"></tbody>
   </table></div>
   <div class="pager" id="hpager"></div>

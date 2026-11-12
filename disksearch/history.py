@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import config
@@ -457,6 +457,71 @@ class HistoryStore:
             )
             return cur.rowcount > 0
 
+    def price_series(self, days=90):
+        """Serie diaria de precio mínimo por producto, para gráficas y barras.
+
+        Devuelve una lista de productos con sus puntos por día (precio mínimo
+        del día entre tiendas disponibles) y el último precio por tienda.
+        Limitada a los últimos `days` días para que el dataset sea liviano.
+        """
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+        with self._connect() as conn:
+            points = conn.execute(
+                """SELECT product_key, substr(observed_at, 1, 10) AS day,
+                          MIN(price) AS price
+                   FROM price_history
+                   WHERE observed_at >= ? AND available = 1
+                   GROUP BY product_key, day
+                   ORDER BY day""",
+                (cutoff,),
+            ).fetchall()
+            stores = conn.execute(
+                """SELECT product_key, store, last_price AS price, last_seen
+                   FROM offers
+                   WHERE available = 1 AND last_price IS NOT NULL
+                   ORDER BY last_price ASC""",
+            ).fetchall()
+        by_product = {}
+        for row in points:
+            by_product.setdefault(row["product_key"], []).append(
+                {"day": row["day"], "price": row["price"]}
+            )
+        stores_by_product = {}
+        for row in stores:
+            entry = stores_by_product.setdefault(row["product_key"], {})
+            if row["store"] not in entry:
+                entry[row["store"]] = {"price": row["price"], "date": row["last_seen"]}
+        series = []
+        for row in self._product_rows():
+            key = row["key"]
+            if key not in by_product and key not in stores_by_product:
+                continue
+            series.append(
+                {
+                    "key": key,
+                    "brand": row["brand"],
+                    "model": row["model"],
+                    "capacity_gb": row["capacity_gb"],
+                    "form_factor": row["form_factor"],
+                    "favorite": bool(row["favorite"]),
+                    "available": bool(row["available"]),
+                    "last_price": row["last_price"],
+                    "best_price": row["best_price"],
+                    "points": by_product.get(key, []),
+                    "stores": stores_by_product.get(key, {}),
+                }
+            )
+        return series
+
+    def _product_rows(self):
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT key, brand, model, capacity_gb, form_factor,
+                          favorite, available, last_price, best_price
+                   FROM products"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def stats(self) -> dict:
         with self._connect() as conn:
             row = conn.execute(
@@ -508,6 +573,9 @@ class NullHistoryStore:
 
     def get_product(self, key):
         return None
+
+    def price_series(self, days=90):
+        return []
 
     def notifications(self, include_dismissed=False):
         return []

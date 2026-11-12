@@ -23,11 +23,71 @@
   let FAV = new Set((D && D.favorites) || BOOTDATA.favorites || []);
 
   const state = { brand: '', sortKey: 'ppt', sortDir: 'asc', page: 1, pageSize: 25, tab: 'search' };
+  const HFILTERS_KEY = 'disksearch-hfilters';
   const hstate = {
     q: '', status: '', favorites: false, sort: 'last_seen', dir: 'desc',
     page: 1, pageSize: 25, total: 0, items: [], stats: {}, notifications: [],
     expanded: null, details: {}, loaded: false,
+    series: [], view: 'table', sel: [],
+    from: '', to: '', pmin: '', pmax: '', form: '', change: false, stores: [],
   };
+
+  // ── filtros del histórico persistentes ────────────────────────────────
+  function saveHFilters() {
+    try {
+      localStorage.setItem(HFILTERS_KEY, JSON.stringify({
+        q: hstate.q, status: hstate.status, favorites: hstate.favorites,
+        from: hstate.from, to: hstate.to, pmin: hstate.pmin, pmax: hstate.pmax,
+        form: hstate.form, change: hstate.change, stores: hstate.stores,
+      }));
+    } catch (error) { /* sin localStorage: no pasa nada */ }
+  }
+
+  function loadHFilters() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HFILTERS_KEY) || '{}');
+      Object.assign(hstate, {
+        q: saved.q || '', status: saved.status || '', favorites: Boolean(saved.favorites),
+        from: saved.from || '', to: saved.to || '', pmin: saved.pmin || '', pmax: saved.pmax || '',
+        form: saved.form || '', change: Boolean(saved.change), stores: saved.stores || [],
+      });
+    } catch (error) { /* datos corruptos: filtros por defecto */ }
+    $('#hq').value = hstate.q;
+    $('#hstatus').value = hstate.status;
+    $('#hfav').checked = hstate.favorites;
+    $('#hfrom').value = hstate.from;
+    $('#hto').value = hstate.to;
+    $('#hpmin').value = hstate.pmin;
+    $('#hpmax').value = hstate.pmax;
+    $('#hform').value = hstate.form;
+    $('#hchange').checked = hstate.change;
+  }
+
+  // ── tema (claro/oscuro/sistema) ───────────────────────────────────────
+  const THEME_KEY = 'disksearch-theme';
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function applyTheme() {
+    const saved = localStorage.getItem(THEME_KEY) || 'system';
+    const theme = saved === 'system' ? (media.matches ? 'dark' : 'light') : saved;
+    document.documentElement.dataset.theme = theme;
+    $$('[data-theme-opt]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.themeOpt === saved));
+    });
+  }
+
+  function initTheme() {
+    applyTheme();
+    $$('[data-theme-opt]').forEach((button) => {
+      button.addEventListener('click', () => {
+        localStorage.setItem(THEME_KEY, button.dataset.themeOpt);
+        applyTheme();
+      });
+    });
+    media.addEventListener('change', () => {
+      if ((localStorage.getItem(THEME_KEY) || 'system') === 'system') applyTheme();
+    });
+  }
 
   // ── utilidades de render ──────────────────────────────────────────────
   function setOptions(selector, values) {
@@ -238,6 +298,7 @@
     hstate.total = boot.total || hstate.items.length;
     hstate.stats = boot.stats || {};
     hstate.notifications = boot.notifications || [];
+    hstate.series = boot.series || [];
     if (boot.favorites) FAV = new Set(boot.favorites);
     hstate.loaded = Boolean(boot.items);
   }
@@ -274,6 +335,7 @@
   function historyRowHtml(item) {
     const favorite = FAV.has(item.key) || Boolean(item.favorite);
     const detailOpen = hstate.expanded === item.key;
+    const url = item.last_url || item.url || '';
     const main = `<tr>
       <td class="favcol"><button type="button" class="fav" data-fav="${esc(item.key)}" aria-pressed="${favorite}" aria-label="${favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}">${favorite ? '★' : '☆'}</button></td>
       <td>${esc(item.brand)}</td>
@@ -283,18 +345,19 @@
       <td class="num">${eur(item.best_price)}</td>
       <td>${fmtDate(item.last_seen)}</td>
       <td>${statusHtml(item)}</td>
+      <td>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Abrir</a>` : '—'}</td>
       <td><button type="button" class="ghost" data-detail="${esc(item.key)}">${detailOpen ? 'Ocultar' : 'Ver'}</button></td>
     </tr>`;
     if (!detailOpen) return main;
     const detail = hstate.details[item.key];
-    if (!detail) return main + `<tr class="detail-row"><td colspan="9" class="empty">Cargando detalle…</td></tr>`;
+    if (!detail) return main + `<tr class="detail-row"><td colspan="10" class="empty">Cargando detalle…</td></tr>`;
     const offers = (detail.offers || []).map((offer) =>
-      `<li>${esc(offer.store)} · ${eur(offer.last_price)} · ${offer.available ? 'disponible' : 'no disponible'} · última vez ${fmtDate(offer.last_seen)}</li>`
+      `<li>${esc(offer.store)} · ${eur(offer.last_price)} · ${offer.available ? 'disponible' : 'no disponible'} · última vez ${fmtDate(offer.last_seen)}${offer.url ? ` · <a href="${esc(offer.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</li>`
     ).join('') || '<li>Sin ofertas registradas.</li>';
     const prices = (detail.price_history || []).slice(0, 20).map((price) =>
       `<li>${fmtDate(price.observed_at)} · ${esc(price.store)} · ${eur(price.price)}${price.available ? '' : ' · no disponible'}</li>`
     ).join('') || '<li>Sin cambios de precio registrados.</li>';
-    return main + `<tr class="detail-row"><td colspan="9"><div class="detail-box">
+    return main + `<tr class="detail-row"><td colspan="10"><div class="detail-box">
       <div><h4>Ofertas por tienda</h4><ul>${offers}</ul></div>
       <div><h4>Evolución de precios</h4><ul>${prices}</ul></div>
     </div></td></tr>`;
@@ -302,18 +365,176 @@
 
   function staticHistoryItems() {
     const query = (hstate.q || '').toLowerCase().trim();
+    const stores = new Set(hstate.stores);
+    const pmin = parseFloat(hstate.pmin);
+    const pmax = parseFloat(hstate.pmax);
     return (hstate.items || []).filter((item) => {
       if (hstate.favorites && !(FAV.has(item.key) || item.favorite)) return false;
       if (hstate.status === 'available' && !item.available) return false;
       if (hstate.status === 'missing' && item.available) return false;
+      if (hstate.form && item.form_factor !== hstate.form) return false;
+      if (hstate.change && item.last_price === item.best_price) return false;
+      if (stores.size && !stores.has(item.last_store || item.store)) return false;
+      const price = item.last_price ?? item.price;
+      if (!Number.isNaN(pmin) && hstate.pmin !== '' && (price == null || price < pmin)) return false;
+      if (!Number.isNaN(pmax) && hstate.pmax !== '' && (price == null || price > pmax)) return false;
+      if (hstate.from && item.last_seen && String(item.last_seen).slice(0, 10) < hstate.from) return false;
+      if (hstate.to && item.last_seen && String(item.last_seen).slice(0, 10) > hstate.to) return false;
       if (query && !`${item.brand} ${item.model} ${item.title}`.toLowerCase().includes(query)) return false;
       return true;
     });
   }
 
-  function renderHistory() {
-    renderHistoryStats();
-    notificationHtml();
+  // ── series (línea y barras) ───────────────────────────────────────────
+  function seriesEligible() {
+    const query = (hstate.q || '').toLowerCase().trim();
+    const stores = new Set(hstate.stores);
+    const pmin = parseFloat(hstate.pmin);
+    const pmax = parseFloat(hstate.pmax);
+    return (hstate.series || []).filter((serie) => {
+      if (hstate.favorites && !serie.favorite && !FAV.has(serie.key)) return false;
+      if (hstate.status === 'available' && !serie.available) return false;
+      if (hstate.status === 'missing' && serie.available) return false;
+      if (hstate.form && serie.form_factor !== hstate.form) return false;
+      if (hstate.change && serie.points.length > 1) {
+        const prices = serie.points.map((p) => p.price);
+        if (new Set(prices).size === 1) return false;
+      }
+      if (stores.size && !Object.keys(serie.stores || {}).some((store) => stores.has(store))) return false;
+      const price = serie.last_price;
+      if (!Number.isNaN(pmin) && hstate.pmin !== '' && (price == null || price < pmin)) return false;
+      if (!Number.isNaN(pmax) && hstate.pmax !== '' && (price == null || price > pmax)) return false;
+      if (query && !`${serie.brand} ${serie.model}`.toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }
+
+  function selectSeries() {
+    const eligible = seriesEligible();
+    const byKey = new Map(eligible.map((serie) => [serie.key, serie]));
+    // limpieza de selecciones que ya no aplican tras cambiar filtros
+    hstate.sel = hstate.sel.filter((key) => byKey.has(key));
+    if (!hstate.sel.length) {
+      const preferred = [...eligible].sort((a, b) => {
+        const fa = (a.favorite || FAV.has(a.key)) ? 0 : 1;
+        const fb = (b.favorite || FAV.has(b.key)) ? 0 : 1;
+        if (fa !== fb) return fa - fb;
+        return (b.points.length || 0) - (a.points.length || 0);
+      }).slice(0, 3);
+      hstate.sel = preferred.map((serie) => serie.key);
+    }
+    return hstate.sel.map((key) => byKey.get(key)).filter(Boolean);
+  }
+
+  function palette(index) {
+    return `hsl(${(index * 67 + 210) % 360} 70% 45%)`;
+  }
+
+  function labelOf(serie) {
+    return `${serie.brand} ${serie.model} · ${fmtCap(serie.capacity_gb)}`.trim();
+  }
+
+  function renderLine() {
+    const selected = selectSeries();
+    const chart = $('#hchart');
+    if (!selected.length) {
+      chart.setAttribute('viewBox', '');
+      chart.innerHTML = `<text x="550" y="180" fill="var(--mute)" text-anchor="middle" font-size="14">Selecciona productos en las marcas de arriba</text>`;
+      return;
+    }
+    // días del eje X (categorías ordenadas), filtrados por el rango de fechas
+    const days = [...new Set(selected.flatMap((serie) =>
+      serie.points.map((point) => point.day)
+    ))].filter((day) => (!hstate.from || day >= hstate.from) && (!hstate.to || day <= hstate.to)).sort();
+    if (!days.length) {
+      chart.innerHTML = `<text x="50%" y="50%" fill="var(--mute)" text-anchor="middle">Sin datos en el rango de fechas seleccionado</text>`;
+      return;
+    }
+    const w = 1100, h = 360, padL = 64, padR = 16, padT = 16, padB = 40;
+    const x = (day) => padL + (days.indexOf(day) / Math.max(1, days.length - 1)) * (w - padL - padR);
+    const prices = selected.flatMap((serie) =>
+      serie.points.filter((p) => days.includes(p.day)).map((p) => p.price));
+    const yMax = Math.max(...prices, 1) * 1.05;
+    const yMin = Math.min(...prices, yMax) * 0.95;
+    const y = (price) => padT + (1 - (price - yMin) / Math.max(yMax - yMin, 0.01)) * (h - padT - padB);
+    const parts = [];
+    // ejes
+    for (let i = 0; i <= 3; i += 1) {
+      const value = yMin + ((yMax - yMin) * i) / 3;
+      const yy = y(value);
+      parts.push(`<line x1="${padL}" y1="${yy}" x2="${w - padR}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`);
+      parts.push(`<text x="${padL - 6}" y="${yy + 4}" fill="var(--mute)" font-size="11" text-anchor="end">${Math.round(value)}€</text>`);
+    }
+    days.forEach((day, i) => {
+      if (days.length <= 8 || i % Math.ceil(days.length / 8) === 0) {
+        parts.push(`<text x="${x(day)}" y="${h - 10}" fill="var(--mute)" font-size="11" text-anchor="middle">${esc(day.slice(5))}</text>`);
+      }
+    });
+    // series
+    selected.forEach((serie, index) => {
+      const pts = serie.points.filter((p) => days.includes(p.day)).map((p) => `${x(p.day)},${y(p.price)}`);
+      const color = palette(index);
+      parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>`);
+      serie.points.filter((p) => days.includes(p.day)).forEach((p) => {
+        parts.push(`<circle cx="${x(p.day)}" cy="${y(p.price)}" r="3.5" fill="${color}"><title>${esc(labelOf(serie))} · ${esc(p.day)} · ${eur(p.price)}</title></circle>`);
+      });
+    });
+    chart.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    chart.innerHTML = parts.join('');
+  }
+
+  function renderBars() {
+    const selected = selectSeries().slice(0, 8);
+    if (!selected.length) {
+      $('#hbars').innerHTML = '<div class="tablewrap"><p class="empty">Sin productos para la comparativa.</p></div>';
+      return;
+    }
+    $('#hbars').innerHTML = selected.map((serie) => {
+      const stores = Object.entries(serie.stores || {}).sort((a, b) => a[1].price - b[1].price);
+      const max = Math.max(1, ...stores.map(([, s]) => s.price));
+      const rows = stores.length
+        ? stores.map(([store, info]) => {
+            const width = Math.max(4, (info.price / max) * 100);
+            const best = info.price === stores[0][1].price;
+            return `<div class="bar-row"><span title="${esc(store)}">${esc(store)}</span><span class="bar"><u style="width:${width}%"></u></span><span class="num"><b>${eur(info.price)}</b>${best ? ' · mejor' : ''}</span></div>`;
+          }).join('')
+        : '<p class="foot">Sin ofertas disponibles registradas.</p>';
+      return `<div class="bar-set"><h4>${esc(labelOf(serie))} · último precio por tienda</h4>${rows}</div>`;
+    }).join('');
+  }
+
+  function showHistoryView(view) {
+    hstate.view = view;
+    $$('[data-hview]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.hview === view));
+    });
+    $('#hline').hidden = view !== 'line';
+    $('#hbars').hidden = view !== 'bars';
+    $('#htable').hidden = view !== 'table';
+    $('#hpager').hidden = view !== 'table';
+    renderHistory();
+  }
+
+  function renderHistoryView() {
+    if (hstate.view === 'line') renderLine();
+    else if (hstate.view === 'bars') renderBars();
+    else renderHistoryTable();
+  }
+
+  function fillHistoryFilters() {
+    setOptions('#hform', [...new Set([
+      ...(hstate.items || []).map((item) => item.form_factor),
+      ...(hstate.series || []).map((serie) => serie.form_factor),
+    ].filter(Boolean))].sort());
+    const stores = [...new Set([
+      ...(hstate.series || []).flatMap((serie) => Object.keys(serie.stores || {})),
+    ])].sort((a, b) => a.localeCompare(b, 'es'));
+    $('#hchips').innerHTML = stores.map((store) =>
+      `<button type="button" class="chip" data-hstore="${esc(store)}" aria-pressed="${hstate.stores.includes(store)}">${esc(store)}</button>`
+    ).join('');
+  }
+
+  function renderHistoryTable() {
     let visible = hstate.items || [];
     let total = hstate.total || 0;
     if (!LIVE) {
@@ -326,9 +547,16 @@
     }
     $('#hrows').innerHTML = visible.length
       ? visible.map(historyRowHtml).join('')
-      : '<tr><td colspan="9" class="empty">Todavía no hay histórico. Realiza una búsqueda o marca un favorito.</td></tr>';
+      : '<tr><td colspan="10" class="empty">Todavía no hay histórico. Realiza una búsqueda o marca un favorito.</td></tr>';
     $('#hpager').innerHTML = pagerHtml(total, hstate.page, hstate.pageSize, 'hpage');
     $('#hfoot').textContent = `${total} modelos en el histórico. Se marca «no visto» tras dos búsquedas fiables sin encontrarlo.`;
+  }
+
+  function renderHistory() {
+    renderHistoryStats();
+    notificationHtml();
+    fillHistoryFilters();
+    renderHistoryView();
     const badge = $('#histbadge');
     const unread = (hstate.stats && hstate.stats.notifications) || 0;
     badge.hidden = !unread;
@@ -352,15 +580,19 @@
       direction: hstate.dir,
     });
     try {
-      const [data, stats, notices] = await Promise.all([
+      const [data, stats, notices, series] = await Promise.all([
         fetch('/api/history?' + params.toString()).then((response) => response.json()),
         fetch('/api/stats').then((response) => response.json()),
         fetch('/api/notifications').then((response) => response.json()),
+        hstate.series.length
+          ? Promise.resolve({ series: hstate.series })
+          : fetch('/api/series').then((response) => response.json()),
       ]);
       hstate.items = data.items || [];
       hstate.total = data.total || 0;
       hstate.stats = stats || {};
       hstate.notifications = notices.items || [];
+      if (series && series.series) hstate.series = series.series;
       hstate.loaded = true;
       renderHistory();
     } catch (error) {
@@ -504,10 +736,12 @@
   }
 
   async function boot() {
+    initTheme();
     if (!D || !D.items) {
       try { await fetchData(); } catch (error) { D = EMPTY; render(); }
     }
     initHistoryFromBoot();
+    loadHFilters();
     render();
     if (!LIVE) {
       setBtn('Búsqueda en vivo: ejecuta python nas_discos.py', true, 0);
@@ -570,9 +804,47 @@
   $('#tab-search').addEventListener('click', () => showTab('search'));
   $('#tab-history').addEventListener('click', () => showTab('history'));
 
-  $('#hq').addEventListener('input', () => { hstate.q = $('#hq').value; loadHistory(true); });
-  $('#hstatus').addEventListener('change', () => { hstate.status = $('#hstatus').value; loadHistory(true); });
-  $('#hfav').addEventListener('change', () => { hstate.favorites = $('#hfav').checked; loadHistory(true); });
+  $('#hq').addEventListener('input', () => { hstate.q = $('#hq').value; saveHFilters(); hstate.sel = []; loadHistory(true); });
+  $('#hstatus').addEventListener('change', () => { hstate.status = $('#hstatus').value; saveHFilters(); hstate.sel = []; loadHistory(true); });
+  $('#hfav').addEventListener('change', () => { hstate.favorites = $('#hfav').checked; saveHFilters(); hstate.sel = []; loadHistory(true); });
+  ['#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => {
+    $(selector).addEventListener('input', () => {
+      hstate.from = $('#hfrom').value; hstate.to = $('#hto').value;
+      hstate.pmin = $('#hpmin').value; hstate.pmax = $('#hpmax').value;
+      hstate.form = $('#hform').value;
+      saveHFilters(); hstate.sel = [];
+      if (!LIVE) renderHistory(); else loadHistory(true);
+    });
+    $(selector).addEventListener('change', () => {
+      saveHFilters(); hstate.sel = [];
+      if (!LIVE) renderHistory(); else loadHistory(true);
+    });
+  });
+  $('#hchange').addEventListener('change', () => { hstate.change = $('#hchange').checked; saveHFilters(); hstate.sel = []; if (!LIVE) renderHistory(); else loadHistory(true); });
+  $('#hreset').addEventListener('click', () => {
+    ['#hq', '#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => { $(selector).value = ''; });
+    $('#hstatus').value = '';
+    $('#hchange').checked = false;
+    $('#hfav').checked = false;
+    Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', change: false, favorites: false, status: '', stores: [], sel: [] });
+    saveHFilters();
+    if (!LIVE) renderHistory(); else loadHistory(true);
+  });
+  $('#hchips').addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-hstore]');
+    if (!chip) return;
+    const store = chip.dataset.hstore;
+    hstate.stores = hstate.stores.includes(store)
+      ? hstate.stores.filter((value) => value !== store)
+      : [...hstate.stores, store];
+    chip.setAttribute('aria-pressed', String(hstate.stores.includes(store)));
+    saveHFilters(); hstate.sel = [];
+    if (!LIVE) renderHistory(); else loadHistory(true);
+  });
+  $('#hviews').addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-hview]');
+    if (chip) showHistoryView(chip.dataset.hview);
+  });
   $('#hsort').addEventListener('change', () => {
     const [sort, direction] = $('#hsort').value.split(':');
     hstate.sort = sort;
