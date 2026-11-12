@@ -28,7 +28,7 @@
     q: '', status: '', favorites: false, sort: 'last_seen', dir: 'desc',
     page: 1, pageSize: 25, total: 0, items: [], stats: {}, notifications: [],
     expanded: null, details: {}, loaded: false,
-    series: [], view: 'table', sel: [],
+    series: [], compare: [], detailView: 'table', barMode: 'day',
     from: '', to: '', pmin: '', pmax: '', form: '', change: false, stores: [],
   };
 
@@ -349,18 +349,14 @@
       <td><button type="button" class="ghost" data-detail="${esc(item.key)}">${detailOpen ? 'Ocultar' : 'Ver'}</button></td>
     </tr>`;
     if (!detailOpen) return main;
-    const detail = hstate.details[item.key];
-    if (!detail) return main + `<tr class="detail-row"><td colspan="10" class="empty">Cargando detalle…</td></tr>`;
-    const offers = (detail.offers || []).map((offer) =>
-      `<li>${esc(offer.store)} · ${eur(offer.last_price)} · ${offer.available ? 'disponible' : 'no disponible'} · última vez ${fmtDate(offer.last_seen)}${offer.url ? ` · <a href="${esc(offer.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</li>`
-    ).join('') || '<li>Sin ofertas registradas.</li>';
-    const prices = (detail.price_history || []).slice(0, 20).map((price) =>
-      `<li>${fmtDate(price.observed_at)} · ${esc(price.store)} · ${eur(price.price)}${price.available ? '' : ' · no disponible'}</li>`
-    ).join('') || '<li>Sin cambios de precio registrados.</li>';
-    return main + `<tr class="detail-row"><td colspan="10"><div class="detail-box">
-      <div><h4>Ofertas por tienda</h4><ul>${offers}</ul></div>
-      <div><h4>Evolución de precios</h4><ul>${prices}</ul></div>
-    </div></td></tr>`;
+    return main + `<tr class="detail-row"><td colspan="10">
+      <div class="chips" role="group" aria-label="Vista del histórico del producto">
+        <button type="button" class="chip" data-dview="table" aria-pressed="${hstate.detailView === 'table'}">Tabla</button>
+        <button type="button" class="chip" data-dview="line" aria-pressed="${hstate.detailView === 'line'}">Líneas</button>
+        <button type="button" class="chip" data-dview="bars" aria-pressed="${hstate.detailView === 'bars'}">Barras</button>
+      </div>
+      <div class="detail-box" id="dpanel"></div>
+    </td></tr>`;
   }
 
   function staticHistoryItems() {
@@ -385,45 +381,37 @@
     });
   }
 
-  // ── series (línea y barras) ───────────────────────────────────────────
-  function seriesEligible() {
-    const query = (hstate.q || '').toLowerCase().trim();
-    const stores = new Set(hstate.stores);
-    const pmin = parseFloat(hstate.pmin);
-    const pmax = parseFloat(hstate.pmax);
-    return (hstate.series || []).filter((serie) => {
-      if (hstate.favorites && !serie.favorite && !FAV.has(serie.key)) return false;
-      if (hstate.status === 'available' && !serie.available) return false;
-      if (hstate.status === 'missing' && serie.available) return false;
-      if (hstate.form && serie.form_factor !== hstate.form) return false;
-      if (hstate.change && serie.points.length > 1) {
-        const prices = serie.points.map((p) => p.price);
-        if (new Set(prices).size === 1) return false;
-      }
-      if (stores.size && !Object.keys(serie.stores || {}).some((store) => stores.has(store))) return false;
-      const price = serie.last_price;
-      if (!Number.isNaN(pmin) && hstate.pmin !== '' && (price == null || price < pmin)) return false;
-      if (!Number.isNaN(pmax) && hstate.pmax !== '' && (price == null || price > pmax)) return false;
-      if (query && !`${serie.brand} ${serie.model}`.toLowerCase().includes(query)) return false;
-      return true;
-    });
+  // ── detalle del producto: histórico por producto ─────────────────────
+  function serieFor(key) {
+    return (hstate.series || []).find((serie) => serie.key === key) || null;
   }
 
-  function selectSeries() {
-    const eligible = seriesEligible();
-    const byKey = new Map(eligible.map((serie) => [serie.key, serie]));
-    // limpieza de selecciones que ya no aplican tras cambiar filtros
-    hstate.sel = hstate.sel.filter((key) => byKey.has(key));
-    if (!hstate.sel.length) {
-      const preferred = [...eligible].sort((a, b) => {
-        const fa = (a.favorite || FAV.has(a.key)) ? 0 : 1;
-        const fb = (b.favorite || FAV.has(b.key)) ? 0 : 1;
-        if (fa !== fb) return fa - fb;
-        return (b.points.length || 0) - (a.points.length || 0);
-      }).slice(0, 3);
-      hstate.sel = preferred.map((serie) => serie.key);
-    }
-    return hstate.sel.map((key) => byKey.get(key)).filter(Boolean);
+  function recordsOf(serie) {
+    if (serie.records && serie.records.length) return serie.records;
+    return (serie.points || []).map((p) => ({ day: p.day, store: '', price: p.price }));
+  }
+
+  function productStats(serie) {
+    const records = recordsOf(serie);
+    if (!records.length) return null;
+    const days = [...new Set(records.map((r) => r.day))].sort();
+    const byDay = days.map((day) => {
+      const prices = records.filter((r) => r.day === day).map((r) => r.price);
+      return { day, price: Math.min(...prices) };
+    });
+    const max = byDay.reduce((a, b) => (b.price > a.price ? b : a));
+    const min = byDay.reduce((a, b) => (b.price < a.price ? b : a));
+    const avg = byDay.reduce((sum, d) => sum + d.price, 0) / byDay.length;
+    const current = byDay[byDay.length - 1];
+    const prev = byDay.length > 1 ? byDay[byDay.length - 2] : null;
+    const pct = (from) => (from && from.price)
+      ? ((current.price - from.price) / from.price) * 100 : null;
+    return {
+      max, min, avg, current, prev,
+      vsPrev: prev ? pct(prev) : null,
+      vsMin: pct(min),
+      vsMax: pct(max),
+    };
   }
 
   function palette(index) {
@@ -434,35 +422,86 @@
     return `${serie.brand} ${serie.model} · ${fmtCap(serie.capacity_gb)}`.trim();
   }
 
-  function renderLine() {
-    const selected = selectSeries();
-    const chart = $('#hchart');
-    if (!selected.length) {
-      chart.setAttribute('viewBox', '');
-      chart.innerHTML = `<text x="550" y="180" fill="var(--mute)" text-anchor="middle" font-size="14">Selecciona productos en las marcas de arriba</text>`;
-      return;
-    }
-    // días del eje X (categorías ordenadas), filtrados por el rango de fechas
-    const days = [...new Set(selected.flatMap((serie) =>
-      serie.points.map((point) => point.day)
-    ))].filter((day) => (!hstate.from || day >= hstate.from) && (!hstate.to || day <= hstate.to)).sort();
-    if (!days.length) {
-      chart.innerHTML = `<text x="50%" y="50%" fill="var(--mute)" text-anchor="middle">Sin datos en el rango de fechas seleccionado</text>`;
-      return;
-    }
-    const w = 1100, h = 360, padL = 64, padR = 16, padT = 16, padB = 40;
+  function compareSeries(mainKey) {
+    const keys = [mainKey, ...hstate.compare.filter((k) => k !== mainKey)];
+    return keys.map(serieFor).filter(Boolean);
+  }
+
+  function compareHtml(main) {
+    const candidates = (hstate.series || [])
+      .filter((s) => s.key !== main.key)
+      .sort((a, b) => {
+        const ca = a.capacity_gb === main.capacity_gb ? 0 : 1;
+        const cb = b.capacity_gb === main.capacity_gb ? 0 : 1;
+        if (ca !== cb) return ca - cb;
+        return (a.last_price || 0) - (b.last_price || 0);
+      })
+      .slice(0, 50);
+    const options = candidates.map((s) =>
+      `<option value="${esc(s.key)}">${esc(labelOf(s))} — ${eur(s.last_price)}</option>`).join('');
+    const chips = hstate.compare.filter((k) => k !== main.key).map((key) => {
+      const s = serieFor(key);
+      return s
+        ? `<button type="button" class="chip" data-compare-remove="${esc(key)}" aria-pressed="true" title="Quitar de la comparativa">${esc(s.model || key)} ✕</button>`
+        : '';
+    }).join('');
+    return `
+      <div class="compare-row">
+        <label for="dcompare">Comparar con:</label>
+        <select id="dcompare" data-compare-add><option value="">Elige un producto…</option>${options}</select>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+      </div>`;
+  }
+
+  function pctText(value) {
+    if (value == null) return '—';
+    return `${value > 0 ? '+' : ''}${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`;
+  }
+
+  function detailTableHtml(main) {
+    const st = productStats(main);
+    if (!st) return '<p class="empty">Sin precios registrados todavía para este producto.</p>';
+    const card = (label, value, date) =>
+      `<div class="pstat"><small>${label}</small><b>${eur(value)}</b><span>${date}</span></div>`;
+    const detail = hstate.details[main.key];
+    const offers = detail && detail.offers && detail.offers.length
+      ? detail.offers.map((offer) =>
+          `<li>${esc(offer.store)} · <b>${eur(offer.last_price)}</b> · ${offer.available ? 'disponible' : 'no disponible'}${offer.url ? ` · <a href="${esc(offer.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</li>`).join('')
+      : Object.entries(main.stores || {}).sort((a, b) => a[1].price - b[1].price)
+        .map(([store, info]) =>
+          `<li>${esc(store)} · <b>${eur(info.price)}</b> · ${fmtDate(info.date)}</li>`).join('');
+    return `
+      <div class="pstats">
+        ${card('Precio más alto', st.max.price, fmtDate(st.max.day))}
+        ${card('Precio medio', st.avg, `entre ${fmtDate(st.min.day)} y ${fmtDate(st.current.day)}`)}
+        ${card('Precio más bajo', st.min.price, fmtDate(st.min.day))}
+        ${card('Precio actual', st.current.price, fmtDate(st.current.day))}
+      </div>
+      <div><h4>Variación de precio</h4><ul>
+        <li>Última búsqueda (${fmtDate(st.current.day)}) vs. anterior (${fmtDate(st.prev ? st.prev.day : '')}): <b>${pctText(st.vsPrev)}</b></li>
+        <li>Actual vs. mínimo (${fmtDate(st.min.day)}): <b>${pctText(st.vsMin)}</b></li>
+        <li>Actual vs. máximo (${fmtDate(st.max.day)}): <b>${pctText(st.vsMax)}</b></li>
+      </ul></div>
+      <div><h4>Ofertas por tienda</h4><ul>${offers}</ul></div>`;
+  }
+
+  function chartSvg(seriesList, kind) {
+    const recordsList = seriesList.map((serie) => ({ serie, records: recordsOf(serie) }));
+    const days = [...new Set(recordsList.flatMap((s) => s.records.map((r) => r.day)))]
+      .filter((day) => (!hstate.from || day >= hstate.from) && (!hstate.to || day <= hstate.to)).sort();
+    if (!days.length) return '<p class="empty">Sin datos en el rango de fechas seleccionado.</p>';
+    const w = 900, h = 320, padL = 60, padR = 16, padT = 16, padB = 40;
     const x = (day) => padL + (days.indexOf(day) / Math.max(1, days.length - 1)) * (w - padL - padR);
-    const prices = selected.flatMap((serie) =>
-      serie.points.filter((p) => days.includes(p.day)).map((p) => p.price));
+    const prices = recordsList.flatMap((s) =>
+      s.records.filter((r) => days.includes(r.day)).map((r) => r.price));
     const yMax = Math.max(...prices, 1) * 1.05;
     const yMin = Math.min(...prices, yMax) * 0.95;
     const y = (price) => padT + (1 - (price - yMin) / Math.max(yMax - yMin, 0.01)) * (h - padT - padB);
     const parts = [];
-    // ejes
     for (let i = 0; i <= 3; i += 1) {
       const value = yMin + ((yMax - yMin) * i) / 3;
       const yy = y(value);
-      parts.push(`<line x1="${padL}" y1="${yy}" x2="${w - padR}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`);
+      parts.push(`<line x1="${padL}" y1="${yy}" x2="${w - padR}" y2="${yy}" stroke="var(--line)"/>`);
       parts.push(`<text x="${padL - 6}" y="${yy + 4}" fill="var(--mute)" font-size="11" text-anchor="end">${Math.round(value)}€</text>`);
     }
     days.forEach((day, i) => {
@@ -470,28 +509,36 @@
         parts.push(`<text x="${x(day)}" y="${h - 10}" fill="var(--mute)" font-size="11" text-anchor="middle">${esc(day.slice(5))}</text>`);
       }
     });
-    // series
-    selected.forEach((serie, index) => {
-      const pts = serie.points.filter((p) => days.includes(p.day)).map((p) => `${x(p.day)},${y(p.price)}`);
-      const color = palette(index);
-      parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>`);
-      serie.points.filter((p) => days.includes(p.day)).forEach((p) => {
-        parts.push(`<circle cx="${x(p.day)}" cy="${y(p.price)}" r="3.5" fill="${color}"><title>${esc(labelOf(serie))} · ${esc(p.day)} · ${eur(p.price)}</title></circle>`);
+    if (kind === 'line') {
+      recordsList.forEach(({ serie, records }, index) => {
+        const color = palette(index);
+        const visible = records.filter((r) => days.includes(r.day));
+        const byDay = new Map();
+        visible.forEach((r) => byDay.set(r.day, Math.min(byDay.get(r.day) ?? Infinity, r.price)));
+        const pts = days.filter((d) => byDay.has(d)).map((d) => `${x(d)},${y(byDay.get(d))}`);
+        parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>`);
+        visible.forEach((r) => {
+          parts.push(`<circle cx="${x(r.day)}" cy="${y(r.price)}" r="3.5" fill="${color}"><title>${esc(labelOf(serie))} · ${esc(r.day)} · ${esc(r.store || '—')} · ${eur(r.price)}</title></circle>`);
+        });
       });
-    });
-    chart.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    chart.innerHTML = parts.join('');
+    } else {
+      const slot = (w - padL - padR) / days.length;
+      const barW = Math.max(2, (slot * 0.8) / recordsList.length);
+      recordsList.forEach(({ serie, records }, index) => {
+        const color = palette(index);
+        records.filter((r) => days.includes(r.day)).forEach((r) => {
+          const bx = x(r.day) - (slot * 0.4) + index * barW;
+          parts.push(`<rect x="${bx}" y="${y(r.price)}" width="${barW}" height="${h - padB - y(r.price)}" fill="${color}"><title>${esc(labelOf(serie))} · ${esc(r.day)} · ${esc(r.store || '—')} · ${eur(r.price)}</title></rect>`);
+        });
+      });
+    }
+    return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Evolución de precios" style="width:100%;height:auto">${parts.join('')}</svg>`;
   }
 
-  function renderBars() {
-    const selected = selectSeries().slice(0, 8);
-    if (!selected.length) {
-      $('#hbars').innerHTML = '<div class="tablewrap"><p class="empty">Sin productos para la comparativa.</p></div>';
-      return;
-    }
-    $('#hbars').innerHTML = selected.map((serie) => {
+  function barsStoreHtml(seriesList) {
+    return seriesList.map((serie) => {
       const stores = Object.entries(serie.stores || {}).sort((a, b) => a[1].price - b[1].price);
-      const max = Math.max(1, ...stores.map(([, s]) => s.price));
+      const max = Math.max(1, ...stores.map(([, info]) => info.price));
       const rows = stores.length
         ? stores.map(([store, info]) => {
             const width = Math.max(4, (info.price / max) * 100);
@@ -503,22 +550,44 @@
     }).join('');
   }
 
-  function showHistoryView(view) {
-    hstate.view = view;
-    $$('[data-hview]').forEach((button) => {
-      button.setAttribute('aria-pressed', String(button.dataset.hview === view));
-    });
-    $('#hline').hidden = view !== 'line';
-    $('#hbars').hidden = view !== 'bars';
-    $('#htable').hidden = view !== 'table';
-    $('#hpager').hidden = view !== 'table';
-    renderHistory();
+  function barsProductHtml(seriesList) {
+    const entries = seriesList.map((serie) => {
+      const st = productStats(serie);
+      return { serie, price: serie.last_price ?? (st ? st.current.price : null) };
+    }).filter((entry) => entry.price != null).sort((a, b) => a.price - b.price);
+    if (!entries.length) return '<p class="empty">Sin precios actuales para comparar.</p>';
+    const max = Math.max(...entries.map((entry) => entry.price));
+    return `<div class="bar-set"><h4>Precio actual por producto</h4>${entries.map(({ serie, price }, i) =>
+      `<div class="bar-row"><span title="${esc(labelOf(serie))}">${esc(serie.model || serie.key)}</span><span class="bar"><u style="width:${Math.max(4, (price / max) * 100)}%"></u></span><span class="num"><b>${eur(price)}</b>${i === 0 ? ' · mejor' : ''}</span></div>`).join('')}</div>`;
+  }
+
+  function renderDetailPanel() {
+    const panel = $('#dpanel');
+    if (!panel || !hstate.expanded) return;
+    const main = serieFor(hstate.expanded);
+    if (!main) {
+      panel.innerHTML = '<p class="empty">Sin datos registrados para este producto todavía.</p>';
+      return;
+    }
+    const seriesList = compareSeries(hstate.expanded);
+    const head = compareHtml(main);
+    if (hstate.detailView === 'table') {
+      panel.innerHTML = head + detailTableHtml(main);
+    } else if (hstate.detailView === 'line') {
+      panel.innerHTML = head + chartSvg(seriesList, 'line');
+    } else {
+      const modes = [['day', 'Evolución por día'], ['store', 'Por tienda'], ['product', 'Por producto']];
+      const modeChips = modes.map(([value, label]) =>
+        `<button type="button" class="chip" data-barmode="${value}" aria-pressed="${hstate.barMode === value}">${label}</button>`).join('');
+      const body = hstate.barMode === 'store' ? barsStoreHtml(seriesList)
+        : hstate.barMode === 'product' ? barsProductHtml(seriesList)
+        : chartSvg(seriesList, 'bars');
+      panel.innerHTML = head + `<div class="chips">${modeChips}</div>` + body;
+    }
   }
 
   function renderHistoryView() {
-    if (hstate.view === 'line') renderLine();
-    else if (hstate.view === 'bars') renderBars();
-    else renderHistoryTable();
+    renderHistoryTable();
   }
 
   function fillHistoryFilters() {
@@ -550,6 +619,7 @@
       : '<tr><td colspan="10" class="empty">Todavía no hay histórico. Realiza una búsqueda o marca un favorito.</td></tr>';
     $('#hpager').innerHTML = pagerHtml(total, hstate.page, hstate.pageSize, 'hpage');
     $('#hfoot').textContent = `${total} modelos en el histórico. Se marca «no visto» tras dos búsquedas fiables sin encontrarlo.`;
+    renderDetailPanel();
   }
 
   function renderHistory() {
@@ -600,27 +670,25 @@
     }
   }
 
-  async function loadDetail(key) {
+  function loadDetail(key) {
     if (hstate.expanded === key) {
       hstate.expanded = null;
       renderHistory();
       return;
     }
     hstate.expanded = key;
+    hstate.detailView = 'table';
     renderHistory();
-    if (!LIVE) {
-      hstate.details[key] = hstate.details[key] || { offers: [], price_history: [] };
-      renderHistory();
-      return;
-    }
-    if (hstate.details[key]) return;
-    try {
-      const detail = await fetch('/api/history/' + encodeURIComponent(key)).then((response) => response.json());
-      hstate.details[key] = detail;
-    } catch (error) {
-      hstate.details[key] = { offers: [], price_history: [] };
-    }
-    renderHistory();
+    if (!LIVE || hstate.details[key]) return;
+    fetch('/api/history/' + encodeURIComponent(key))
+      .then((response) => response.json())
+      .then((detail) => {
+        hstate.details[key] = detail;
+        if (hstate.expanded === key) renderHistory();
+      })
+      .catch(() => {
+        hstate.details[key] = { offers: [] };
+      });
   }
 
   // ── acciones ──────────────────────────────────────────────────────────
@@ -804,29 +872,29 @@
   $('#tab-search').addEventListener('click', () => showTab('search'));
   $('#tab-history').addEventListener('click', () => showTab('history'));
 
-  $('#hq').addEventListener('input', () => { hstate.q = $('#hq').value; saveHFilters(); hstate.sel = []; loadHistory(true); });
-  $('#hstatus').addEventListener('change', () => { hstate.status = $('#hstatus').value; saveHFilters(); hstate.sel = []; loadHistory(true); });
-  $('#hfav').addEventListener('change', () => { hstate.favorites = $('#hfav').checked; saveHFilters(); hstate.sel = []; loadHistory(true); });
+  $('#hq').addEventListener('input', () => { hstate.q = $('#hq').value; saveHFilters(); loadHistory(true); });
+  $('#hstatus').addEventListener('change', () => { hstate.status = $('#hstatus').value; saveHFilters(); loadHistory(true); });
+  $('#hfav').addEventListener('change', () => { hstate.favorites = $('#hfav').checked; saveHFilters(); loadHistory(true); });
   ['#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => {
     $(selector).addEventListener('input', () => {
       hstate.from = $('#hfrom').value; hstate.to = $('#hto').value;
       hstate.pmin = $('#hpmin').value; hstate.pmax = $('#hpmax').value;
       hstate.form = $('#hform').value;
-      saveHFilters(); hstate.sel = [];
+      saveHFilters();
       if (!LIVE) renderHistory(); else loadHistory(true);
     });
     $(selector).addEventListener('change', () => {
-      saveHFilters(); hstate.sel = [];
+      saveHFilters();
       if (!LIVE) renderHistory(); else loadHistory(true);
     });
   });
-  $('#hchange').addEventListener('change', () => { hstate.change = $('#hchange').checked; saveHFilters(); hstate.sel = []; if (!LIVE) renderHistory(); else loadHistory(true); });
+  $('#hchange').addEventListener('change', () => { hstate.change = $('#hchange').checked; saveHFilters(); if (!LIVE) renderHistory(); else loadHistory(true); });
   $('#hreset').addEventListener('click', () => {
     ['#hq', '#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => { $(selector).value = ''; });
     $('#hstatus').value = '';
     $('#hchange').checked = false;
     $('#hfav').checked = false;
-    Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', change: false, favorites: false, status: '', stores: [], sel: [] });
+    Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', change: false, favorites: false, status: '', stores: [] });
     saveHFilters();
     if (!LIVE) renderHistory(); else loadHistory(true);
   });
@@ -838,12 +906,8 @@
       ? hstate.stores.filter((value) => value !== store)
       : [...hstate.stores, store];
     chip.setAttribute('aria-pressed', String(hstate.stores.includes(store)));
-    saveHFilters(); hstate.sel = [];
+    saveHFilters();
     if (!LIVE) renderHistory(); else loadHistory(true);
-  });
-  $('#hviews').addEventListener('click', (event) => {
-    const chip = event.target.closest('[data-hview]');
-    if (chip) showHistoryView(chip.dataset.hview);
   });
   $('#hsort').addEventListener('change', () => {
     const [sort, direction] = $('#hsort').value.split(':');
@@ -862,6 +926,40 @@
       hstate.pageSize = Number(event.target.value);
       loadHistory(true);
     }
+  });
+
+  // ── vistas y comparativa dentro del desplegable del producto ──────────
+  $('#hrows').addEventListener('click', (event) => {
+    const dview = event.target.closest('[data-dview]');
+    if (dview) {
+      hstate.detailView = dview.dataset.dview;
+      renderHistory();
+      return;
+    }
+    const barmode = event.target.closest('[data-barmode]');
+    if (barmode) {
+      hstate.barMode = barmode.dataset.barmode;
+      renderHistory();
+      return;
+    }
+    const remove = event.target.closest('[data-compare-remove]');
+    if (remove) {
+      hstate.compare = hstate.compare.filter((key) => key !== remove.dataset.compareRemove);
+      renderHistory();
+    }
+  });
+
+  $('#hrows').addEventListener('change', (event) => {
+    const add = event.target.closest('[data-compare-add]');
+    if (!add || !add.value || hstate.compare.includes(add.value)) return;
+    if (hstate.compare.length >= 4) {
+      toast('Máximo 4 productos en la comparativa.');
+      add.value = '';
+      return;
+    }
+    hstate.compare = [...hstate.compare, add.value];
+    add.value = '';
+    renderHistory();
   });
 
   document.addEventListener('click', (event) => {
