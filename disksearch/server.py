@@ -137,6 +137,8 @@ def make_handler(demo, debug, store):
                     self._json(200, store.stats())
                 elif path == "/api/searches":
                     self._json(200, {"items": store.recent_searches()})
+                elif path == "/api/series":
+                    self._json(200, {"series": store.price_series()})
                 elif path in ("/", "/index.html"):
                     html = render_html(
                         STATE["data"], True, history_snapshot(store)

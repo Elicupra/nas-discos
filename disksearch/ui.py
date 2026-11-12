@@ -14,7 +14,7 @@ def _json_for_script(value) -> str:
 def history_snapshot(store, limit=25) -> dict:
     """Instantánea para el arranque y para el modo --once."""
     if store is None:
-        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": []}
+        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": [], "series": []}
     try:
         listing = store.list_products(limit=limit, offset=0, sort="last_seen", direction="desc")
         return {
@@ -23,9 +23,10 @@ def history_snapshot(store, limit=25) -> dict:
             "stats": store.stats(),
             "notifications": store.notifications(),
             "favorites": store.favorites(),
+            "series": store.price_series(),
         }
     except Exception:
-        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": []}
+        return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": [], "series": []}
 
 
 def render_html(data, live, history=None) -> str:
