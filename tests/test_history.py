@@ -20,6 +20,13 @@ def make_data(capacities, store="Shop", ok=True, price_offset=0):
     )
 
 
+def make_partial(data, summary="SSD"):
+    """Marca un dataset como búsqueda acotada (no detecta ausencias)."""
+    data["meta"]["partial"] = True
+    data["meta"]["scope"] = summary
+    return data
+
+
 class HistoryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -108,6 +115,64 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(hdd["items"][0]["kind"], "HDD")
         self.assertEqual(ssd["items"][0]["kind"], "SSD")
         self.assertEqual({s["kind"] for s in self.store.price_series()}, {"HDD", "SSD"})
+
+    def test_partial_search_updates_and_never_marks_missing(self):
+        first = make_data([4, 8])
+        self.store.record_search(first)
+        key_a = next(item["key"] for item in first["items"] if item["capacity_gb"] == 4000)
+        self.store.set_favorite(key_a, True)
+
+        # Dos búsquedas acotadas seguidas que no incluyen el 4 TB.
+        for _ in range(3):
+            partial = make_partial(make_data([8], price_offset=5))
+            self.store.record_search(partial)
+
+        # El producto ausente sigue disponible y no ha generado avisos.
+        product = self.store.get_product(key_a)["product"]
+        self.assertEqual(product["available"], 1)
+        self.assertEqual(product["favorite"], 1)
+        self.assertEqual(self.store.stats()["missing"], 0)
+        self.assertEqual(self.store.notifications(), [])
+
+        # El producto que sí entra en el ámbito se ha actualizado: sube el
+        # último precio pero se conserva el mejor histórico.
+        key_b = next(item["key"] for item in first["items"] if item["capacity_gb"] == 8000)
+        updated = self.store.get_product(key_b)["product"]
+        self.assertAlmostEqual(updated["last_price"], 113.0, places=2)
+        self.assertAlmostEqual(updated["best_price"], 108.0, places=2)
+
+    def test_partial_search_inserts_new_products(self):
+        self.store.record_search(make_partial(make_data([4, 8])))
+        listing = self.store.list_products()
+        self.assertEqual(listing["total"], 2)
+
+    def test_complete_search_after_partial_still_detects_missing(self):
+        first = make_data([4, 8])
+        self.store.record_search(first)
+        key_a = next(item["key"] for item in first["items"] if item["capacity_gb"] == 4000)
+        self.store.set_favorite(key_a, True)
+
+        # La acotada no marca ausencia.
+        self.store.record_search(make_partial(make_data([8])))
+        self.assertEqual(self.store.get_product(key_a)["product"]["available"], 1)
+
+        # Dos completas sin el 4 TB sí lo marcan.
+        self.store.record_search(make_data([8]))
+        self.store.record_search(make_data([8]))
+        self.assertEqual(self.store.get_product(key_a)["product"]["available"], 0)
+
+    def test_searches_record_scope(self):
+        self.store.record_search(make_partial(make_data([8]), summary="SSD · 1 tienda"))
+        recent = self.store.recent_searches()
+        self.assertIn("scope_json", recent[0])
+        self.assertIn("SSD", recent[0]["scope_json"])
+
+    def test_old_schema_without_scope_column_still_records(self):
+        """Una base antigua sin scope_json debe seguir funcionando."""
+        with self.store._connect() as conn:
+            conn.execute("ALTER TABLE searches DROP COLUMN scope_json")
+        self.store.record_search(make_data([8]))
+        self.assertEqual(len(self.store.recent_searches()), 1)
 
     def test_dismiss_notification(self):
         first = make_data([4])

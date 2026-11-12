@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS searches (
     raw_count INTEGER NOT NULL DEFAULT 0,
     unique_count INTEGER NOT NULL DEFAULT 0,
     shown_count INTEGER NOT NULL DEFAULT 0,
-    sources_json TEXT NOT NULL DEFAULT '[]'
+    sources_json TEXT NOT NULL DEFAULT '[]',
+    scope_json TEXT
 );
 CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,27 +147,52 @@ class HistoryStore:
 
     # ── registro de búsquedas ────────────────────────────────────────────
     def record_search(self, data: dict) -> dict:
-        """Guarda la búsqueda, sus ofertas y detecta ausencias fiables."""
+        """Guarda la búsqueda, sus ofertas y detecta ausencias fiables.
+
+        Una búsqueda acotada (``meta.partial``) nunca marca ausencias ni
+        cambia disponibilidades; solo actualiza o inserta productos del ámbito.
+        """
         meta = data.get("meta") or {}
         sources = meta.get("sources") or []
         reliable = [s["name"] for s in sources if s.get("ok")]
+        partial = bool(meta.get("partial"))
         now = now_iso()
         items = data.get("items") or []
         before = {}
 
         with self._connect() as conn:
-            cursor = conn.execute(
-                """INSERT INTO searches
-                   (started_at, finished_at, status, pages_ok, raw_count,
-                    unique_count, shown_count, sources_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    now, now, "ok" if items else "empty",
-                    int(meta.get("pages") or 0), int(meta.get("raw") or 0),
-                    int(meta.get("unique") or 0), int(meta.get("shown") or 0),
-                    __import__("json").dumps(sources, ensure_ascii=False),
-                ),
+            # Migración segura: scope_json puede no existir en bases antiguas.
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(searches)")}
+            scope_json = __import__("json").dumps(
+                {"scope": meta.get("scope"), "partial": partial}, ensure_ascii=False
             )
+            if "scope_json" in columns:
+                cursor = conn.execute(
+                    """INSERT INTO searches
+                       (started_at, finished_at, status, pages_ok, raw_count,
+                        unique_count, shown_count, sources_json, scope_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        now, now, "ok" if items else "empty",
+                        int(meta.get("pages") or 0), int(meta.get("raw") or 0),
+                        int(meta.get("unique") or 0), int(meta.get("shown") or 0),
+                        __import__("json").dumps(sources, ensure_ascii=False),
+                        scope_json,
+                    ),
+                )
+            else:
+                cursor = conn.execute(
+                    """INSERT INTO searches
+                       (started_at, finished_at, status, pages_ok, raw_count,
+                        unique_count, shown_count, sources_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        now, now, "ok" if items else "empty",
+                        int(meta.get("pages") or 0), int(meta.get("raw") or 0),
+                        int(meta.get("unique") or 0), int(meta.get("shown") or 0),
+                        __import__("json").dumps(sources, ensure_ascii=False),
+                    ),
+                )
             search_id = cursor.lastrowid
 
             # Estado previo de todos los productos: los upserts de esta misma
@@ -271,103 +297,110 @@ class HistoryStore:
                         )
 
             # Ausencias por tienda fiable. Una tienda bloqueada no cuenta.
-            for store in reliable:
-                rows = conn.execute(
-                    """SELECT product_key, url, last_price, missing_count
-                       FROM offers
-                       WHERE store=? AND available=1
-                         AND (last_search_id IS NULL OR last_search_id<>?)""",
-                    (store, search_id),
-                ).fetchall()
-                for row in rows:
-                    missing_count = int(row["missing_count"] or 0) + 1
-                    if missing_count >= 2:
-                        conn.execute(
-                            """UPDATE offers SET available=0, missing_count=?,
-                               missing_since=COALESCE(missing_since, ?)
-                               WHERE product_key=? AND store=? AND url=?""",
-                            (missing_count, now, row["product_key"], store, row["url"]),
-                        )
-                        conn.execute(
-                            """INSERT INTO price_history
-                               (product_key, store, observed_at, price, available)
-                               VALUES (?, ?, ?, ?, 0)""",
-                            (row["product_key"], store, now, row["last_price"] or 0),
-                        )
-                    else:
-                        conn.execute(
-                            """UPDATE offers SET missing_count=?
-                               WHERE product_key=? AND store=? AND url=?""",
-                            (missing_count, row["product_key"], store, row["url"]),
-                        )
+            # Las búsquedas acotadas no marcan ausencias para no corromper el
+            # histórico con un subconjunto de productos.
+            if not partial:
+                for store in reliable:
+                    rows = conn.execute(
+                        """SELECT product_key, url, last_price, missing_count
+                           FROM offers
+                           WHERE store=? AND available=1
+                             AND (last_search_id IS NULL OR last_search_id<>?)""",
+                        (store, search_id),
+                    ).fetchall()
+                    for row in rows:
+                        missing_count = int(row["missing_count"] or 0) + 1
+                        if missing_count >= 2:
+                            conn.execute(
+                                """UPDATE offers SET available=0, missing_count=?,
+                                   missing_since=COALESCE(missing_since, ?)
+                                   WHERE product_key=? AND store=? AND url=?""",
+                                (missing_count, now, row["product_key"], store, row["url"]),
+                            )
+                            conn.execute(
+                                """INSERT INTO price_history
+                                   (product_key, store, observed_at, price, available)
+                                   VALUES (?, ?, ?, ?, 0)""",
+                                (row["product_key"], store, now, row["last_price"] or 0),
+                            )
+                        else:
+                            conn.execute(
+                                """UPDATE offers SET missing_count=?
+                                   WHERE product_key=? AND store=? AND url=?""",
+                                (missing_count, row["product_key"], store, row["url"]),
+                            )
 
             # Disponibilidad a nivel de producto y avisos solo para favoritos.
-            products = conn.execute(
-                "SELECT key, available, missing_since, favorite FROM products"
-            ).fetchall()
-            for product in products:
-                available = conn.execute(
-                    "SELECT 1 FROM offers WHERE product_key=? AND available=1 LIMIT 1",
-                    (product["key"],),
-                ).fetchone() is not None
-                previous = before.get(product["key"], {})
-                old_available = bool(previous.get("available", product["available"]))
-                old_missing_since = previous.get("missing_since", product["missing_since"])
-                if available and not old_available:
-                    conn.execute(
-                        """UPDATE products SET available=1, missing_count=0,
-                           missing_since=NULL WHERE key=?""",
+            # En búsquedas acotadas no recalculamos disponibilidad: no se sabe
+            # si un producto ausente lo es realmente o simplemente no estaba en
+            # el ámbito.
+            if not partial:
+                products = conn.execute(
+                    "SELECT key, available, missing_since, favorite FROM products"
+                ).fetchall()
+                for product in products:
+                    available = conn.execute(
+                        "SELECT 1 FROM offers WHERE product_key=? AND available=1 LIMIT 1",
                         (product["key"],),
-                    )
-                    if product["favorite"]:
-                        title_row = conn.execute(
-                            "SELECT brand, model FROM products WHERE key=?",
-                            (product["key"],),
-                        ).fetchone()
-                        label = f'{title_row["brand"]} {title_row["model"]}'.strip()
+                    ).fetchone() is not None
+                    previous = before.get(product["key"], {})
+                    old_available = bool(previous.get("available", product["available"]))
+                    old_missing_since = previous.get("missing_since", product["missing_since"])
+                    if available and not old_available:
                         conn.execute(
-                            """INSERT INTO notifications
-                               (product_key, kind, created_at, message)
-                               SELECT ?, 'back', ?, ?
-                               WHERE NOT EXISTS (
-                                 SELECT 1 FROM notifications
-                                 WHERE product_key=? AND kind='back'
-                                   AND created_at >= COALESCE(?, '1970-01-01')
-                               )""",
-                            (
-                                product["key"], now,
-                                f"{label} vuelve a estar disponible.",
-                                product["key"], old_missing_since,
-                            ),
-                        )
-                elif not available and old_available:
-                    conn.execute(
-                        """UPDATE products SET available=0,
-                           missing_count=missing_count+1,
-                           missing_since=COALESCE(missing_since, ?) WHERE key=?""",
-                        (now, product["key"]),
-                    )
-                    if product["favorite"]:
-                        title_row = conn.execute(
-                            "SELECT brand, model FROM products WHERE key=?",
+                            """UPDATE products SET available=1, missing_count=0,
+                               missing_since=NULL WHERE key=?""",
                             (product["key"],),
-                        ).fetchone()
-                        label = f'{title_row["brand"]} {title_row["model"]}'.strip()
-                        conn.execute(
-                            """INSERT INTO notifications
-                               (product_key, kind, created_at, message)
-                               SELECT ?, 'missing', ?, ?
-                               WHERE NOT EXISTS (
-                                 SELECT 1 FROM notifications
-                                 WHERE product_key=? AND kind='missing'
-                                   AND created_at >= COALESCE(?, '1970-01-01')
-                               )""",
-                            (
-                                product["key"], now,
-                                f"{label} ya no aparece en las tiendas.",
-                                product["key"], now,
-                            ),
                         )
+                        if product["favorite"]:
+                            title_row = conn.execute(
+                                "SELECT brand, model FROM products WHERE key=?",
+                                (product["key"],),
+                            ).fetchone()
+                            label = f'{title_row["brand"]} {title_row["model"]}'.strip()
+                            conn.execute(
+                                """INSERT INTO notifications
+                                   (product_key, kind, created_at, message)
+                                   SELECT ?, 'back', ?, ?
+                                   WHERE NOT EXISTS (
+                                     SELECT 1 FROM notifications
+                                     WHERE product_key=? AND kind='back'
+                                       AND created_at >= COALESCE(?, '1970-01-01')
+                                   )""",
+                                (
+                                    product["key"], now,
+                                    f"{label} vuelve a estar disponible.",
+                                    product["key"], old_missing_since,
+                                ),
+                            )
+                    elif not available and old_available:
+                        conn.execute(
+                            """UPDATE products SET available=0,
+                               missing_count=missing_count+1,
+                               missing_since=COALESCE(missing_since, ?) WHERE key=?""",
+                            (now, product["key"]),
+                        )
+                        if product["favorite"]:
+                            title_row = conn.execute(
+                                "SELECT brand, model FROM products WHERE key=?",
+                                (product["key"],),
+                            ).fetchone()
+                            label = f'{title_row["brand"]} {title_row["model"]}'.strip()
+                            conn.execute(
+                                """INSERT INTO notifications
+                                   (product_key, kind, created_at, message)
+                                   SELECT ?, 'missing', ?, ?
+                                   WHERE NOT EXISTS (
+                                     SELECT 1 FROM notifications
+                                     WHERE product_key=? AND kind='missing'
+                                       AND created_at >= COALESCE(?, '1970-01-01')
+                                   )""",
+                                (
+                                    product["key"], now,
+                                    f"{label} ya no aparece en las tiendas.",
+                                    product["key"], now,
+                                ),
+                            )
 
         return {"search_id": search_id, "reliable_sources": reliable}
 

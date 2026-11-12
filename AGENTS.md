@@ -2,9 +2,10 @@
 
 ## Resumen
 
-Aplicación local en Python que busca discos duros internos HDD (2,5" y 3,5")
-en tiendas españolas, muestra una tabla comparable y guarda un histórico en
-SQLite con favoritos y avisos de productos desaparecidos.
+Aplicación local en Python que busca discos internos HDD (2,5" y 3,5") y SSD
+(SATA 2,5" y M.2/mSATA) en tiendas españolas, muestra una tabla comparable y
+guarda un histórico en SQLite con favoritos y avisos de productos
+desaparecidos.
 
 ## Convenciones de OpenCode
 
@@ -105,11 +106,14 @@ python -m unittest discover -s tests -v
 
 ## Estructura
 
-- `nas_discos.py`: entrada CLI compatible (`--once`, `--demo`, `--historico-html`).
+- `nas_discos.py`: entrada CLI compatible (`--once`, `--demo`,
+  `--historico-html`, y `--kind`/`--store`/`--text` para búsquedas acotadas).
 - `disksearch/config.py`: fuentes, límites de red y rutas.
 - `disksearch/parsing.py`: precios, capacidades y clave canónica.
-- `disksearch/extractors.py`: extractores por tienda.
-- `disksearch/search.py`: búsqueda, agregación y demo (progreso por tienda).
+- `disksearch/extractors.py`: extractores por tienda y del agregador
+  (`extract_geeknetic`).
+- `disksearch/search.py`: búsqueda, ámbito (`scope`), agregación y demo
+  (progreso por tienda).
 - `disksearch/history.py`: interfaz de histórico + SQLite (`price_series`).
 - `disksearch/server.py`: servidor HTTP/API (estado por tienda en `/api/status`).
 - `disksearch/web/`: UI (HTML, CSS y JS).
@@ -128,8 +132,13 @@ python -m unittest discover -s tests -v
 - Mantener pausas entre peticiones.
 - Un bloqueo anti-bot no debe marcar productos como ausentes.
 - No añadir tiendas frágiles sin un extractor probado con fixture.
-- Si se amplía a SSD/NVMe/externos, hacerlo en una rama y añadir filtros de
-  tipo antes de activar las fuentes.
+- Ya se buscan SSD internos SATA 2,5" y M.2/mSATA. Los externos, portátiles,
+  carcasas y packs siguen fuera del alcance.
+- Geeknetic es un **agregador** (`aggregator: true` en `config.py`): precios
+  «desde», no se siguen enlaces `ver-tienda` ni fichas, y nunca cuenta para
+  detectar ausencias.
+- Las búsquedas acotadas (`scope`) no marcan ausencias ni cambian
+  disponibilidad: solo una búsqueda completa lo hace.
 
 ## Histórico
 
@@ -138,6 +147,9 @@ python -m unittest discover -s tests -v
   se usa automáticamente `~/.local/share/disk-search/history.sqlite3`.
 - Favoritos manuales; todo modelo visto se guarda.
 - Un producto se marca no disponible tras **2 ausencias fiables**.
+- Las búsquedas acotadas (`meta.partial`) actualizan o insertan productos, pero
+  **no** marcan ausencias ni cambian disponibilidad; el ámbito se guarda en
+  `searches.scope_json` con migración segura.
 - Los avisos no intrusivos se muestran solo para favoritos.
 - Histórico diario en GitHub Actions: el workflow
   `.github/workflows/history-daily.yml` acumula el SQLite en la rama
