@@ -169,14 +169,23 @@ local.
 **Opción 2 — Descargar el SQLite o el HTML del histórico desde GitHub:**
 
 En **Actions → Histórico diario de precios → ejecución → Artifacts** está
-`nas-discos-<n>`, que incluye `history.sqlite3` y `historico.html` de esa
-corrida. El HTML es estático y autocontenido (tabla de histórico con precios
-por fecha y tienda; no incluye favoritos): se descarga, se abre en el
-navegador y no necesita servidor. También se puede regenerar en local:
+`nas-discos-<n>`, que incluye `history.sqlite3`, `historico.html` e
+`index.html` de esa corrida. El HTML es estático y autocontenido (tabla de
+histórico con precios por fecha y tienda; no incluye favoritos): se descarga,
+se abre en el navegador y no necesita servidor. También se puede regenerar
+en local:
 
 ```bash
 python nas_discos.py --historico-html historico.html
 ```
+
+**Opción 2b — URL pública (recomendada):**
+
+Cada run diario publica el histórico en
+<https://elicupra.github.io/nas-discos-pages/> (repo público
+`Elicupra/nas-discos-pages` con Pages). Expone precios por tienda y fecha,
+pero no favoritos ni datos personales. Si el secret `PAGES_TOKEN` no está
+configurado, el run lo avisa y solo deja el artifact.
 
 **Opción 3 — Consulta rápida por terminal:**
 
