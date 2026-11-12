@@ -52,9 +52,12 @@ labels `spec`/`incidencia`/`decision-pendiente` y milestones por sprint.)*
 
 ## Estado actual (2026-11-12)
 
-- Pendiente de cerrar a mano: **#2, #3, #4, #5, #6** (todo Sprint 0 está
-  resuelto en `main`; el token no tenía permiso para cerrarlos).
-- Pendiente de decidir: **#7** (publicación) y **#11** (recorte de páginas).
-- Pendiente de implementar: **#9 (SPEC_9)** y **#10 (SPEC_10)**.
+- Pendiente de cerrar a mano: **#2, #3, #4, #5, #6** (Sprint 0 resuelto) y
+  **#7** (decidido: opción A, artifact — comentar la decisión y cerrar).
+  El token de API no puede cerrar ni comentar issues.
+- Implementado: **#9 (SPEC_9)** y **#10 (SPEC_10)** en
+  `feat/historico-diario` (commits `9e9acef`, `d1bc16f`) → cerrar al hacer
+  merge a `main`. **#8 (SPEC_8)** implementado con la opción A del artifact
+  (commit `aac0f56`) → cerrar al hacer merge.
 - Milestones/labels: crearlos a mano en *Issues → Milestones/Labels*
   siguiendo la tabla de sprints (el token de API no tiene ese permiso).
