@@ -20,6 +20,7 @@ STATE = {
     "error": "",
     "history_error": "",
     "last": 0.0,
+    "stores": {},
 }
 LOCK = threading.Lock()
 
@@ -34,12 +35,27 @@ def empty_data():
 
 def worker(demo, debug, store):
     try:
-        def progress(value, label):
+        def progress(value, label, store_name=None, info=None):
             STATE.update(progress=value, label=label)
+            if store_name:
+                entry = STATE["stores"].setdefault(
+                    store_name, {"state": "buscando", "results": None}
+                )
+                if info:
+                    entry.update(info)
+                else:
+                    entry["state"] = "buscando"
 
-        data = demo_dataset() if demo else run_search(progress, debug)
         if demo:
-            time.sleep(3)
+            # simulación de progreso por tienda para la demo
+            for name in ("PCComponentes", "Coolmod", "Alternate", "Amazon"):
+                STATE["stores"][name] = {"state": "buscando", "results": None}
+                time.sleep(0.6)
+                STATE["stores"][name] = {"state": "ok", "results": 30}
+            time.sleep(1)
+            data = demo_dataset()
+        else:
+            data = run_search(progress, debug)
         try:
             store.record_search(data)
             STATE["history_error"] = ""
@@ -62,7 +78,7 @@ def start(demo, debug, store):
         wait = config.COOLDOWN - (time.time() - STATE["last"])
         if STATE["running"] or wait > 0:
             return False, max(0, int(wait))
-        STATE.update(running=True, progress=0.0, label="", error="", history_error="")
+        STATE.update(running=True, progress=0.0, label="", error="", history_error="", stores={})
     threading.Thread(target=worker, args=(demo, debug, store), daemon=True).start()
     return True, 0
 
@@ -90,7 +106,7 @@ def make_handler(demo, debug, store):
             )
             return {
                 key: STATE[key]
-                for key in ("running", "progress", "label", "error", "history_error")
+                for key in ("running", "progress", "label", "error", "history_error", "stores")
             } | {"cooldown": cooldown}
 
         def _read_json(self):
@@ -184,7 +200,6 @@ def make_handler(demo, debug, store):
 
 
 def serve(demo, debug, store, port=None, open_browser=True):
-    start(demo, debug, store)
     server = ThreadingHTTPServer(
         ("127.0.0.1", port or config.PORT), make_handler(demo, debug, store)
     )

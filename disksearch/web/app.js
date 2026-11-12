@@ -22,7 +22,7 @@
   let BOOTDATA = BOOT || {};
   let FAV = new Set((D && D.favorites) || BOOTDATA.favorites || []);
 
-  const state = { brand: '', sortKey: 'ppt', sortDir: 'asc', page: 1, pageSize: 25, tab: 'search' };
+  const state = { brand: '', sortKey: 'ppt', sortDir: 'asc', page: 1, pageSize: 25, tab: 'history' };
   const HFILTERS_KEY = 'disksearch-hfilters';
   const hstate = {
     q: '', status: '', favorites: false, sort: 'last_seen', dir: 'desc',
@@ -276,7 +276,7 @@
     const maxCapacity = Math.max(1, ...(D.items || []).map((item) => item.capacity_gb || 0));
     $('#rows').innerHTML = visible.length
       ? visible.map((item) => rowHtml(item, maxCapacity)).join('')
-      : '<tr><td colspan="10" class="empty">Sin resultados. Prueba con otro filtro o pulsa «Buscar de nuevo».</td></tr>';
+      : '<tr><td colspan="10" class="empty">Sin resultados. Prueba con otro filtro o pulsa «Buscar».</td></tr>';
     $('#pager').innerHTML = pagerHtml(all.length, state.page, state.pageSize, 'page');
     $('#foot').textContent = `${all.length} discos en pantalla. «Mejor» pondera €/TB (50%), valoración (25%), gama NAS (15%) y caché (10%).`;
     renderSortState();
@@ -781,14 +781,14 @@
   function cooldown(seconds) {
     clearInterval(cooldownTimer);
     if (seconds <= 0) {
-      setBtn('Buscar de nuevo', false, 0);
+      setBtn('Buscar', false, 0);
       return;
     }
     cooldownTimer = setInterval(() => {
       seconds -= 1;
       if (seconds <= 0) {
         clearInterval(cooldownTimer);
-        setBtn('Buscar de nuevo', false, 0);
+        setBtn('Buscar', false, 0);
       } else {
         setBtn(`Disponible en ${seconds} s`, true, 0);
       }
@@ -808,18 +808,48 @@
       const status = await fetch('/api/status').then((response) => response.json());
       if (status.running) {
         setBtn(`Buscando… ${status.label || ''}`, true, Math.round((status.progress || 0) * 100));
+        updateSearchModal(status);
         setTimeout(poll, 1000);
       } else {
+        closeSearchModal();
         await fetchData();
         render();
         cooldown(status.cooldown || 0);
         $('#rehint').textContent = status.error ? 'Error: ' + status.error : (status.history_error || '');
+        showTab('search');
         loadHistory(true);
       }
     } catch (error) {
-      setBtn('Buscar de nuevo', false, 0);
+      closeSearchModal();
+      setBtn('Buscar', false, 0);
       $('#rehint').textContent = 'No se pudo consultar el servidor.';
     }
+  }
+
+  function openSearchModal() {
+    $('#searchmodal').hidden = false;
+    $('#srows').innerHTML = '';
+  }
+
+  function closeSearchModal() {
+    $('#searchmodal').hidden = true;
+  }
+
+  function updateSearchModal(status) {
+    $('#slabel').textContent = status.label || 'Buscando…';
+    const stores = status.stores || {};
+    const order = Object.keys(stores);
+    if (!order.length) {
+      $('#srows').innerHTML = '<p class="foot">Conectando con las tiendas…</p>';
+      return;
+    }
+    $('#srows').innerHTML = order.map((name) => {
+      const info = stores[name] || {};
+      const state = info.state || 'buscando';
+      const pct = state === 'ok' ? 100 : state === 'buscando' ? 50 : 100;
+      const results = info.results == null ? '…' : `${info.results} discos`;
+      return `<div class="srow"><span title="${esc(name)}">${esc(name)}</span><span class="bar"><u style="width:${pct}%"></u></span><span class="st ${esc(state)}">${esc(state)} · ${results}</span></div>`;
+    }).join('');
   }
 
   async function boot() {
@@ -830,6 +860,7 @@
     initHistoryFromBoot();
     loadHFilters();
     updateHApplyLabel();
+    showTab(state.tab);
     render();
     if (!LIVE) {
       setBtn('Búsqueda en vivo: ejecuta python nas_discos.py', true, 0);
@@ -838,12 +869,11 @@
     }
     try {
       const status = await fetch('/api/status').then((response) => response.json());
-      if (status.running) poll();
-      else if (!D.items || !D.items.length) poll();
+      if (status.running) { openSearchModal(); poll(); }
       else cooldown(status.cooldown || 0);
       await loadHistory(false);
     } catch (error) {
-      setBtn('Buscar de nuevo', false, 0);
+      setBtn('Buscar', false, 0);
     }
   }
 
@@ -1016,16 +1046,19 @@
   btn.addEventListener('click', async () => {
     if (!LIVE) return;
     setBtn('Iniciando…', true, 2);
+    openSearchModal();
     try {
       const response = await fetch('/api/refresh', { method: 'POST' });
       if (response.status === 429) {
+        closeSearchModal();
         const data = await response.json();
         cooldown(data.cooldown || 0);
         return;
       }
       poll();
     } catch (error) {
-      setBtn('Buscar de nuevo', false, 0);
+      closeSearchModal();
+      setBtn('Buscar', false, 0);
       $('#rehint').textContent = 'No se pudo iniciar la búsqueda.';
     }
   });
