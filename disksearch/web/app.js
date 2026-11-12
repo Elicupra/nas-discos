@@ -28,7 +28,7 @@
     q: '', status: '', favorites: false, sort: 'last_seen', dir: 'desc',
     page: 1, pageSize: 25, total: 0, items: [], stats: {}, notifications: [],
     expanded: null, details: {}, loaded: false,
-    series: [], compare: [], detailView: 'table', barMode: 'day',
+    series: [], compare: [], compareOn: false, detailView: 'table', barMode: 'day',
     from: '', to: '', pmin: '', pmax: '', form: '', change: false, stores: [],
   };
 
@@ -355,7 +355,7 @@
         <button type="button" class="chip" data-dview="line" aria-pressed="${hstate.detailView === 'line'}">Líneas</button>
         <button type="button" class="chip" data-dview="bars" aria-pressed="${hstate.detailView === 'bars'}">Barras</button>
       </div>
-      <div class="detail-box" id="dpanel"></div>
+      <div class="detail-panel" id="dpanel"></div>
     </td></tr>`;
   }
 
@@ -446,11 +446,13 @@
         : '';
     }).join('');
     return `
+      <label class="check compare-check"><input type="checkbox" data-compare-check ${hstate.compareOn ? 'checked' : ''}> Comparar con otro producto</label>
+      ${hstate.compareOn ? `
       <div class="compare-row">
         <label for="dcompare">Comparar con:</label>
         <select id="dcompare" data-compare-add><option value="">Elige un producto…</option>${options}</select>
         ${chips ? `<div class="chips">${chips}</div>` : ''}
-      </div>`;
+      </div>` : ''}`;
   }
 
   function pctText(value) {
@@ -458,31 +460,44 @@
     return `${value > 0 ? '+' : ''}${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`;
   }
 
-  function detailTableHtml(main) {
-    const st = productStats(main);
-    if (!st) return '<p class="empty">Sin precios registrados todavía para este producto.</p>';
+  function detailColumnHtml(serie, title) {
+    const st = productStats(serie);
+    if (!st) return `<div class="detail-col"><h4>${title}</h4><p class="foot">Sin precios registrados todavía.</p></div>`;
     const card = (label, value, date) =>
       `<div class="pstat"><small>${label}</small><b>${eur(value)}</b><span>${date}</span></div>`;
-    const detail = hstate.details[main.key];
-    const offers = detail && detail.offers && detail.offers.length
-      ? detail.offers.map((offer) =>
-          `<li>${esc(offer.store)} · <b>${eur(offer.last_price)}</b> · ${offer.available ? 'disponible' : 'no disponible'}${offer.url ? ` · <a href="${esc(offer.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</li>`).join('')
-      : Object.entries(main.stores || {}).sort((a, b) => a[1].price - b[1].price)
-        .map(([store, info]) =>
-          `<li>${esc(store)} · <b>${eur(info.price)}</b> · ${fmtDate(info.date)}</li>`).join('');
     return `
-      <div class="pstats">
-        ${card('Precio más alto', st.max.price, fmtDate(st.max.day))}
-        ${card('Precio medio', st.avg, `entre ${fmtDate(st.min.day)} y ${fmtDate(st.current.day)}`)}
-        ${card('Precio más bajo', st.min.price, fmtDate(st.min.day))}
-        ${card('Precio actual', st.current.price, fmtDate(st.current.day))}
-      </div>
-      <div><h4>Variación de precio</h4><ul>
-        <li>Última búsqueda (${fmtDate(st.current.day)}) vs. anterior (${fmtDate(st.prev ? st.prev.day : '')}): <b>${pctText(st.vsPrev)}</b></li>
-        <li>Actual vs. mínimo (${fmtDate(st.min.day)}): <b>${pctText(st.vsMin)}</b></li>
-        <li>Actual vs. máximo (${fmtDate(st.max.day)}): <b>${pctText(st.vsMax)}</b></li>
-      </ul></div>
-      <div><h4>Ofertas por tienda</h4><ul>${offers}</ul></div>`;
+      <div class="detail-col">
+        <h4>${title}</h4>
+        <div class="pstats">
+          ${card('Precio más alto', st.max.price, fmtDate(st.max.day))}
+          ${card('Precio medio', st.avg, `entre ${fmtDate(st.min.day)} y ${fmtDate(st.current.day)}`)}
+          ${card('Precio más bajo', st.min.price, fmtDate(st.min.day))}
+          ${card('Precio actual', st.current.price, fmtDate(st.current.day))}
+        </div>
+        <div class="pvars"><h5>Variación de precio</h5><ul>
+          <li>Última búsqueda (${fmtDate(st.current.day)}) vs. anterior (${fmtDate(st.prev ? st.prev.day : '')}): <b>${pctText(st.vsPrev)}</b></li>
+          <li>Actual vs. mínimo (${fmtDate(st.min.day)}): <b>${pctText(st.vsMin)}</b></li>
+          <li>Actual vs. máximo (${fmtDate(st.max.day)}): <b>${pctText(st.vsMax)}</b></li>
+        </ul></div>
+      </div>`;
+  }
+
+  function detailTableHtml(main) {
+    const others = compareSeries(main.key).filter((s) => s.key !== main.key);
+    const columns = [detailColumnHtml(main, `${esc(labelOf(main))} · seleccionado`)]
+      .concat(others.map((s) => detailColumnHtml(s, `${esc(labelOf(s))} · comparado`)));
+    const offersOf = (serie) => {
+      const detail = hstate.details[serie.key];
+      const list = detail && detail.offers && detail.offers.length
+        ? detail.offers.map((offer) =>
+            `<li>${esc(offer.store)} · <b>${eur(offer.last_price)}</b> · ${offer.available ? 'disponible' : 'no disponible'}${offer.url ? ` · <a href="${esc(offer.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</li>`).join('')
+        : Object.entries(serie.stores || {}).sort((a, b) => a[1].price - b[1].price)
+          .map(([store, info]) =>
+            `<li>${esc(store)} · <b>${eur(info.price)}</b> · ${fmtDate(info.date)}</li>`).join('');
+      return `<div class="detail-col"><h4>Ofertas por tienda</h4><ul>${list || '<li>Sin ofertas registradas.</li>'}</ul></div>`;
+    };
+    return `<div class="detail-cols">${columns.join('')}</div>
+      <div class="detail-cols">${compareSeries(main.key).map(offersOf).join('')}</div>`;
   }
 
   function chartSvg(seriesList, kind) {
@@ -574,15 +589,15 @@
     if (hstate.detailView === 'table') {
       panel.innerHTML = head + detailTableHtml(main);
     } else if (hstate.detailView === 'line') {
-      panel.innerHTML = head + chartSvg(seriesList, 'line');
+      panel.innerHTML = head + `<div class="chart-wrap">${chartSvg(seriesList, 'line')}</div>`;
     } else {
       const modes = [['day', 'Evolución por día'], ['store', 'Por tienda'], ['product', 'Por producto']];
-      const modeChips = modes.map(([value, label]) =>
-        `<button type="button" class="chip" data-barmode="${value}" aria-pressed="${hstate.barMode === value}">${label}</button>`).join('');
+      const modeChips = `<div class="chips sm">${modes.map(([value, label]) =>
+        `<button type="button" class="chip" data-barmode="${value}" aria-pressed="${hstate.barMode === value}">${label}</button>`).join('')}</div>`;
       const body = hstate.barMode === 'store' ? barsStoreHtml(seriesList)
         : hstate.barMode === 'product' ? barsProductHtml(seriesList)
-        : chartSvg(seriesList, 'bars');
-      panel.innerHTML = head + `<div class="chips">${modeChips}</div>` + body;
+        : `<div class="chart-wrap">${chartSvg(seriesList, 'bars')}</div>`;
+      panel.innerHTML = head + modeChips + body;
     }
   }
 
@@ -613,6 +628,10 @@
       hstate.page = Math.min(Math.max(1, hstate.page), pages);
       const start = (hstate.page - 1) * hstate.pageSize;
       visible = visible.slice(start, start + hstate.pageSize);
+    }
+    // el desplegable solo vive mientras su producto esté en el listado visible
+    if (hstate.expanded && !visible.some((item) => item.key === hstate.expanded)) {
+      hstate.expanded = null;
     }
     $('#hrows').innerHTML = visible.length
       ? visible.map(historyRowHtml).join('')
@@ -810,6 +829,7 @@
     }
     initHistoryFromBoot();
     loadHFilters();
+    updateHApplyLabel();
     render();
     if (!LIVE) {
       setBtn('Búsqueda en vivo: ejecuta python nas_discos.py', true, 0);
@@ -872,30 +892,43 @@
   $('#tab-search').addEventListener('click', () => showTab('search'));
   $('#tab-history').addEventListener('click', () => showTab('history'));
 
-  $('#hq').addEventListener('input', () => { hstate.q = $('#hq').value; saveHFilters(); loadHistory(true); });
-  $('#hstatus').addEventListener('change', () => { hstate.status = $('#hstatus').value; saveHFilters(); loadHistory(true); });
-  $('#hfav').addEventListener('change', () => { hstate.favorites = $('#hfav').checked; saveHFilters(); loadHistory(true); });
-  ['#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => {
-    $(selector).addEventListener('input', () => {
-      hstate.from = $('#hfrom').value; hstate.to = $('#hto').value;
-      hstate.pmin = $('#hpmin').value; hstate.pmax = $('#hpmax').value;
-      hstate.form = $('#hform').value;
-      saveHFilters();
-      if (!LIVE) renderHistory(); else loadHistory(true);
-    });
-    $(selector).addEventListener('change', () => {
-      saveHFilters();
-      if (!LIVE) renderHistory(); else loadHistory(true);
-    });
+  // ── filtros del histórico: se aplican solo al pulsar «Aplicar filtros» ─
+  function applyHFilters() {
+    hstate.q = $('#hq').value;
+    hstate.status = $('#hstatus').value;
+    hstate.favorites = $('#hfav').checked;
+    hstate.from = $('#hfrom').value; hstate.to = $('#hto').value;
+    hstate.pmin = $('#hpmin').value; hstate.pmax = $('#hpmax').value;
+    hstate.form = $('#hform').value;
+    hstate.change = $('#hchange').checked;
+    hstate.expanded = null;
+    saveHFilters();
+    updateHApplyLabel();
+    if (!LIVE) renderHistory(); else loadHistory(true);
+  }
+
+  function updateHApplyLabel() {
+    const n = [
+      hstate.q, hstate.from, hstate.to, hstate.pmin, hstate.pmax, hstate.form,
+      hstate.status, hstate.change ? 'x' : '', hstate.favorites ? 'x' : '',
+      ...hstate.stores,
+    ].filter(Boolean).length;
+    $('#happly').textContent = n ? `Aplicar filtros (${n})` : 'Aplicar filtros';
+  }
+
+  $('#happly').addEventListener('click', applyHFilters);
+  $('#hq').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') applyHFilters();
   });
-  $('#hchange').addEventListener('change', () => { hstate.change = $('#hchange').checked; saveHFilters(); if (!LIVE) renderHistory(); else loadHistory(true); });
   $('#hreset').addEventListener('click', () => {
     ['#hq', '#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => { $(selector).value = ''; });
     $('#hstatus').value = '';
     $('#hchange').checked = false;
     $('#hfav').checked = false;
     Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', change: false, favorites: false, status: '', stores: [] });
+    hstate.expanded = null;
     saveHFilters();
+    updateHApplyLabel();
     if (!LIVE) renderHistory(); else loadHistory(true);
   });
   $('#hchips').addEventListener('click', (event) => {
@@ -907,6 +940,7 @@
       : [...hstate.stores, store];
     chip.setAttribute('aria-pressed', String(hstate.stores.includes(store)));
     saveHFilters();
+    updateHApplyLabel();
     if (!LIVE) renderHistory(); else loadHistory(true);
   });
   $('#hsort').addEventListener('change', () => {
@@ -930,6 +964,13 @@
 
   // ── vistas y comparativa dentro del desplegable del producto ──────────
   $('#hrows').addEventListener('click', (event) => {
+    const check = event.target.closest('[data-compare-check]');
+    if (check) {
+      hstate.compareOn = check.checked;
+      if (!check.checked) hstate.compare = [];
+      renderHistory();
+      return;
+    }
     const dview = event.target.closest('[data-dview]');
     if (dview) {
       hstate.detailView = dview.dataset.dview;
