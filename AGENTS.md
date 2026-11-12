@@ -76,7 +76,7 @@ python nas_discos.py --demo
 # HTML estático
 python nas_discos.py --demo --once
 
-# servidor real
+# servidor real (la portada es el Histórico; la búsqueda se lanza a mano)
 python nas_discos.py
 
 # búsqueda diaria en local (igual que el workflow de GitHub Actions)
@@ -109,13 +109,16 @@ python -m unittest discover -s tests -v
 - `disksearch/config.py`: fuentes, límites de red y rutas.
 - `disksearch/parsing.py`: precios, capacidades y clave canónica.
 - `disksearch/extractors.py`: extractores por tienda.
-- `disksearch/search.py`: búsqueda, agregación y demo.
-- `disksearch/history.py`: interfaz de histórico + SQLite.
-- `disksearch/server.py`: servidor HTTP/API.
+- `disksearch/search.py`: búsqueda, agregación y demo (progreso por tienda).
+- `disksearch/history.py`: interfaz de histórico + SQLite (`price_series`).
+- `disksearch/server.py`: servidor HTTP/API (estado por tienda en `/api/status`).
 - `disksearch/web/`: UI (HTML, CSS y JS).
-- `.github/workflows/disk-search-daily.yml`: búsqueda diaria y publicación en
-  Pages.
+- `.github/workflows/history-daily.yml`: histórico diario, guard en la rama
+  `state`, `historico.html` en el artifact y publicación en
+  `Elicupra/nas-discos-pages` (Pages, secret `PAGES_TOKEN`).
 - `docs/github-actions.md`: activación, histórico en caché y limitaciones.
+- `docs/plans/SPEC_x.md`: specs por issue (gitignored).
+- `HTW_ISSUES.md`: metodología de gestión de issues para el humano.
 - `scripts/daily.sh`: reproducción local del flujo diario.
 - `tests/`: pruebas de regresión sin red.
 
