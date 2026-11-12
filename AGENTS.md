@@ -105,7 +105,7 @@ python -m unittest discover -s tests -v
 
 ## Estructura
 
-- `nas_discos.py`: entrada CLI compatible.
+- `nas_discos.py`: entrada CLI compatible (`--once`, `--demo`, `--historico-html`).
 - `disksearch/config.py`: fuentes, límites de red y rutas.
 - `disksearch/parsing.py`: precios, capacidades y clave canónica.
 - `disksearch/extractors.py`: extractores por tienda.

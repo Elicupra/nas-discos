@@ -29,6 +29,21 @@ def history_snapshot(store, limit=25) -> dict:
         return {"items": [], "total": 0, "stats": {}, "notifications": [], "favorites": [], "series": []}
 
 
+def render_history_html(store) -> str:
+    """Página estática solo con el histórico (para el artifact del workflow).
+
+    Reutiliza la misma UI y estilos que ``nas_discos.html``, pero sin dataset
+    de búsqueda: al abrir el histórico pestaña muestra los datos embebidos.
+    No incluye favoritos ajenos al usuario ni datos personales.
+    """
+    empty = {
+        "meta": {"time": "—", "pages": 0, "raw": 0, "unique": 0, "shown": 0, "sources": []},
+        "items": [],
+        "highlights": {},
+    }
+    return render_html(empty, False, history_snapshot(store, limit=200))
+
+
 def render_html(data, live, history=None) -> str:
     template = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     css = (WEB_DIR / "styles.css").read_text(encoding="utf-8")

@@ -146,6 +146,10 @@ jobs:
             git push origin state
           fi
 
+      - name: Generar página estática del histórico
+        if: success()
+        run: python nas_discos.py --historico-html public/historico.html
+
       - name: Subir artifact de diagnóstico
         if: always()
         uses: actions/upload-artifact@v4
@@ -153,6 +157,7 @@ jobs:
           name: nas-discos-${{ github.run_number }}
           path: |
             public/index.html
+            public/historico.html
             .cache/disk-search/history.sqlite3
           if-no-files-found: warn
           retention-days: 30

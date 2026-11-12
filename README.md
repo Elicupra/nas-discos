@@ -166,10 +166,17 @@ por tienda y ofertas de los días acumulados. Usa siempre una copia del SQLite
 (no lo apuntes a `data/history.sqlite3`) para no mezclarlo con tu histórico
 local.
 
-**Opción 2 — Descargar el SQLite desde GitHub:**
+**Opción 2 — Descargar el SQLite o el HTML del histórico desde GitHub:**
 
 En **Actions → Histórico diario de precios → ejecución → Artifacts** está
-`nas-discos-<n>`, que incluye `history.sqlite3` de esa corrida.
+`nas-discos-<n>`, que incluye `history.sqlite3` y `historico.html` de esa
+corrida. El HTML es estático y autocontenido (tabla de histórico con precios
+por fecha y tienda; no incluye favoritos): se descarga, se abre en el
+navegador y no necesita servidor. También se puede regenerar en local:
+
+```bash
+python nas_discos.py --historico-html historico.html
+```
 
 **Opción 3 — Consulta rápida por terminal:**
 
