@@ -1,10 +1,20 @@
 # Ejecución diaria en GitHub Actions
 
-## Histórico diario en la rama `state` (workflow `history-daily.yml`)
+El repositorio tiene **dos workflows** que hacen cosas distintas:
+
+| Workflow | Qué hace | Dónde publica |
+|---|---|---|
+| `history-daily.yml` | Acumula el histórico de precios en un SQLite persistente | Rama `state` + repo `nas-discos-pages` (Pages) |
+| `disk-search-daily.yml` | Busca y publica la tabla de resultados | Pages del propio repo `nas-discos` |
+
+El flujo recomendado (y el que usa el histórico entre días) es
+`history-daily.yml`. El segundo es una alternativa más simple que no conserva
+el histórico de forma duradera.
+
+## Histórico diario en la rama `state` (`history-daily.yml`)
 
 `.github/workflows/history-daily.yml` ejecuta la búsqueda una vez al día
-(06:00 UTC) y su único cometido es **acumular el histórico de precios en un
-SQLite persistente**:
+(06:00 UTC) y **acumula el histórico de precios en un SQLite persistente**:
 
 1. Instala Python, las dependencias y Chromium de Playwright.
 2. Lanza las pruebas sin red del repositorio.
@@ -14,12 +24,38 @@ SQLite persistente**:
 5. Comprueba que la búsqueda haya devuelto discos; si no, **falla y no
    commitea**, para que un bloqueo anti-bot nunca corrompa el histórico.
 6. Hace commit del SQLite actualizado en la rama `state` con un mensaje como
-   `history: 2026-11-10 (107 discos)` y lo publica con push. Si el SQLite no
-   ha cambiado, no commitea.
-7. Sube un artifact de diagnóstico con el HTML y el SQLite de esa corrida
+   `history: 2026-11-13 (N discos)` y lo publica con push. Si el SQLite no ha
+   cambiado, no commitea.
+7. Genera `historico.html` con `python nas_discos.py --historico-html` y lo
+   publica en el repo público **`Elicupra/nas-discos-pages`** (opción B del
+   issue #7), que es el que tiene Pages activo. Si el contenido no cambia, no
+   commitea.
+8. Sube un artifact de diagnóstico con el HTML y el SQLite de esa corrida
    (30 días).
 
-No usa secretos: solo necesita el `GITHUB_TOKEN` con `contents: write`.
+Usa `GITHUB_TOKEN` con `contents: write` para la rama `state` y el secreto
+`PAGES_TOKEN` para el repo de Pages.
+
+### Estado actual verificado (2026-11-13)
+
+- Repo **`Elicupra/nas-discos-pages`**: existe, es público y su rama por
+  defecto es `main`.
+- Secreto **`PAGES_TOKEN`**: configurado en `Elicupra/nas-discos`.
+- Pages **del repo `nas-discos`**: sin configurar (no hace falta para la opción
+  B).
+- Página esperada del histórico:
+  <https://elicupra.github.io/nas-discos-pages/>.
+
+> **Antes de la primera publicación**: hay que activar Pages en
+> `nas-discos-pages` (**Settings → Pages → Build and deployment → Source:
+> Deploy from a branch → `main` / `/ (root)`**). Si no está activo, el push
+> funciona pero la URL aún no sirve la página.
+>
+> **Aviso (histórico, ya corregido)**: entre el merge del panel de búsqueda
+> (#19) y el `fix/once-progress`, `python nas_discos.py --once` fallaba con
+> `TypeError: ... takes 2 positional arguments but 4 were given`, así que el
+> paso "Buscar discos" moría y el workflow nunca llegaba a publicar. Tras el
+> fix, el flujo vuelve a completarse.
 
 ### Restaurar el histórico en local
 
@@ -27,9 +63,12 @@ Para trabajar con el histórico acumulado en tu equipo:
 
 ```bash
 git fetch origin state
-git show origin/state:state/history.sqlite3 > historico.sqlite3
-DISKSEARCH_DB="$PWD/historico.sqlite3" python nas_discos.py
+git show origin/state:state/history.sqlite3 > /tmp/opencode/historico.sqlite3
+DISKSEARCH_DB=/tmp/opencode/historico.sqlite3 python nas_discos.py
 ```
+
+Usa siempre una copia (no apuntes `DISKSEARCH_DB` a `data/history.sqlite3`)
+para no mezclarla con tu histórico local.
 
 Para eliminar el histórico y empezar de cero, borra la rama `state`
 (`git push origin --delete state`); la siguiente ejecución creará una nueva.
@@ -42,102 +81,53 @@ Para eliminar el histórico y empezar de cero, borra la rama `state`
   rama remota como base.
 - El anti-bot y el cron impreciso aplican igual que al resto de workflows.
 
-## Publicación en GitHub Pages (workflow `disk-search-daily.yml`)
+## Publicación en GitHub Pages
 
-El repositorio también incluye un workflow que ejecuta la búsqueda una vez al
-día, publica `nas_discos.html` en GitHub Pages y deja el HTML como artifact
-descargable. El histórico SQLite se conserva entre ejecuciones mediante la
-caché de Actions, sin commitear datos al repositorio.
+### Opción B — repo dedicado `nas-discos-pages` (la que se usa)
 
-## Qué hace
+El histórico se publica en un repositorio **público** separado para no mezclar
+el SQLite ni los datos con el repo de código:
 
-`.github/workflows/disk-search-daily.yml`:
+1. Repo de destino: `Elicupra/nas-discos-pages` (creado).
+2. Pages: **Settings → Pages → Source: Deploy from a branch → `main` / `/ (root)`**.
+3. Token: un PAT con permiso de escritura (`Contents: Read and write`) sobre
+   ese repo.
+4. Secreto: en `Elicupra/nas-discos`, **Settings → Secrets and variables →
+   Actions → New repository secret**, nombre `PAGES_TOKEN`.
+5. Ejecutar **Actions → Histórico diario de precios → Run workflow**.
 
-1. Se ejecuta todos los días a las `06:00 UTC` (≈07:00 en invierno y 08:00 en
-   verano, hora de Madrid) y también a mano desde la pestaña **Actions**.
-2. Instala Python, las dependencias y Chromium de Playwright.
-3. Lanza las pruebas sin red del repositorio.
-4. Restaura el histórico SQLite desde la caché de Actions.
-5. Ejecuta `python nas_discos.py --once --debug`.
-6. Comprueba que la búsqueda haya devuelto discos; si no, falla y no publica.
-7. Guarda el histórico actualizado en la caché.
-8. Sube `nas_discos.html` como artifact descargable (30 días).
-9. Publica el HTML en **GitHub Pages**.
+El paso "Publicar en nas-discos-pages" clona el repo de Pages, copia
+`historico.html` como `index.html` y hace push a `main`. Si `PAGES_TOKEN` no
+está definido, avisa y no publica (no rompe el job).
 
-No usa secretos ni tokens propios: el workflow solo necesita el
-`GITHUB_TOKEN` que GitHub proporciona automáticamente.
-
-## Activación
-
-Solo hace falta una vez:
-
-1. **Actions**: abre la pestaña Actions del repositorio y acepta habilitar los
-   workflows si GitHub los muestra desactivados.
-2. **Pages**: ve a **Settings → Pages → Build and deployment** y elige
-   **Source: GitHub Actions**. No selecciones "Deploy from a branch".
-3. **Primera ejecución**: en **Actions → Búsqueda diaria de discos → Run
-   workflow**. Así compruebas el flujo sin esperar al cron.
-
-Cuando termine correctamente, la página estará en:
+URL resultante:
 
 ```text
-https://eliqupra.github.io/nas-discos/
+https://elicupra.github.io/nas-discos-pages/
 ```
 
-La URL exacta depende del usuario y del nombre del repositorio. También
-aparece en el resumen del job y en **Settings → Pages**.
+### Opción alternativa — Pages del propio repo (`disk-search-daily.yml`)
 
-### Probar antes del merge
+`.github/workflows/disk-search-daily.yml` ejecuta la búsqueda y publica la
+tabla de resultados (`nas_discos.html`) en el Pages del repo `nas-discos`:
 
-El cron y el botón **Run workflow** solo están disponibles cuando el workflow
-está en la rama por defecto (`main`). Para poder validarlo antes, el workflow
-incluye un disparador temporal `push` para la rama
-`feat/github-actions-diario`: al subir la rama se ejecuta la búsqueda completa,
-se guarda la caché y se sube el artifact, pero **no** se despliega en Pages
-(los pasos de publicación están limitados a `main`).
+1. Se ejecuta a las `06:00 UTC` y también a mano (**Run workflow**).
+2. Corre las pruebas, busca, comprueba que haya resultados (si no, no publica).
+3. Publica `nas_discos.html` como página y lo deja como artifact.
 
-Cuando la rama esté validada, elimina el bloque `push` antes del merge para que
-no se lance una búsqueda en cada push a esa rama. Si se queda, tampoco rompe
-nada: la rama desaparece tras el merge.
+Activación:
 
-## Dónde ver los resultados
+1. **Actions**: habilita los workflows si aparecen desactivados.
+2. **Pages**: **Settings → Pages → Source: GitHub Actions**.
+3. **Run workflow** manual la primera vez.
 
-- **Página publicada**: `https://eliqupra.github.io/nas-discos/`.
-- **Artifact**: en la ejecución del workflow, sección **Artifacts**,
-  `nas-discos-<número>`. Contiene el `index.html` de esa ejecución concreta.
-- **Logs**: el paso "Buscar discos" muestra el progreso por tienda y termina
-  con una línea `OK: nas_discos.html (N discos distintos)`. Con `--debug`
-  también registra cada URL y cuántos productos se extraen.
-
-## Histórico entre ejecuciones
-
-El workflow define:
-
-```yaml
-DISKSEARCH_DB: ${{ github.workspace }}/.cache/disk-search/history.sqlite3
-```
-
-y guarda la carpeta `.cache/disk-search` con `actions/cache`. La clave de
-caché es única por ejecución (`disksearch-history-<run_id>-<run_attempt>`) y
-se restaura la más reciente con el prefijo `disksearch-history-`.
-
-Consecuencias:
-
-- El histórico no se commitea al repositorio ni se publica.
-- La caché no es una copia de seguridad. GitHub puede eliminarla por
-  inactividad o por límite de almacenamiento.
-- Para empezar de cero, borra las entradas del prefijo `disksearch-history-`
-  en **Actions → Caches** o cambia el prefijo en el workflow.
-- Las entradas antiguas dejan de usarse y GitHub las elimina tras un tiempo,
-  así que no crecen indefinidamente.
-
-Si prefieres un histórico más duradero, la alternativa es commitear el SQLite
-a una rama `state`. No se hace por defecto porque ensucia el historial de git
-y, en un repositorio público, expondría los favoritos.
+No usa secretos propios: solo el `GITHUB_TOKEN` y permisos de Pages. El
+histórico se guarda en la caché de Actions (no durable), por lo que **no
+sustituye a la opción B**; se usa si solo quieres ver la última tabla.
 
 ## Ejecución local
 
-El script `scripts/daily.sh` reproduce el mismo flujo en tu equipo:
+El script `scripts/daily.sh` reproduce el flujo del workflow en tu equipo:
 
 ```bash
 chmod +x scripts/daily.sh
@@ -160,6 +150,16 @@ Variables opcionales:
   `~/.venvs/disk-search`).
 - `DISKSEARCH_DB`: ruta alternativa del SQLite.
 
+## Dónde ver los resultados
+
+- **Histórico publicado**: <https://elicupra.github.io/nas-discos-pages/>.
+- **Artifact**: en la ejecución del workflow, sección **Artifacts**,
+  `nas-discos-<número>`. Contiene `index.html`, `historico.html` y el
+  `history.sqlite3` de esa corrida.
+- **Logs**: el paso "Buscar discos" muestra el progreso por tienda y termina
+  con una línea `OK: nas_discos.html (N discos distintos)`. Con `--debug`
+  también registra cada URL y cuántos productos se extraen.
+
 ## Ajustes habituales
 
 ### Cambiar la hora
@@ -181,7 +181,7 @@ workflow.
 
 ### Forzar una ejecución
 
-**Actions → Búsqueda diaria de discos → Run workflow**. No hace falta esperar
+**Actions → Histórico diario de precios → Run workflow**. No hace falta esperar
 al cron.
 
 ## Limitaciones
@@ -196,7 +196,7 @@ al cron.
 - **Modo estático**: en `--once` los favoritos no se guardan. El histórico y
   los avisos sí se generan a partir de la base de datos.
 - **Resultados vacíos**: si la búsqueda no devuelve ningún disco, el workflow
-  falla y no despliega para no sustituir la última página válida por una vacía.
+  falla y no publica para no sustituir la última página válida por una vacía.
   El artifact de esa ejecución sí se sube para poder diagnosticar.
 - **Repositorio público**: la página y el artifact son visibles para
   cualquiera. No publiques el repositorio si el histórico contiene datos que
@@ -209,11 +209,19 @@ al cron.
 
 ## Diagnóstico
 
-### El job falla en "Desplegar en Pages"
+### El job falla en "Buscar discos"
 
-Suele significar que Pages no está configurado con **Source: GitHub Actions**.
-Revisa **Settings → Pages**. Si el repositorio es privado, Pages puede requerir
-un plan de pago.
+Muy probablemente sea un fallo de la propia búsqueda. Revisa el log del paso y
+ejecuta en local `python nas_discos.py --once --debug` (o
+`scripts/daily.sh --debug`). Si es un `TypeError` sobre los argumentos del
+callback de progreso, comprueba que `nas_discos.cli_progress` y el `progress`
+de `disksearch/server.py` aceptan `(valor, etiqueta, tienda, estado)`.
+
+### El job falla en "Publicar en nas-discos-pages"
+
+Revisa que `PAGES_TOKEN` tenga permiso de escritura sobre
+`nas-discos-pages`. Si el secreto no existe, el paso avisa y termina sin
+publicar (exit 0).
 
 ### La búsqueda termina pero hay pocos discos
 
@@ -223,15 +231,14 @@ probar la misma búsqueda en local con `scripts/daily.sh --debug`.
 
 ### No se restaura el histórico
 
-La primera ejecución no tiene caché y muestra un aviso; es normal. A partir de
-la segunda debería restaurarse. Comprueba que el prefijo de `restore-keys`
-coincide con el de la clave.
+La primera ejecución no tiene rama `state` y muestra un aviso; es normal. A
+partir de la segunda debería restaurarse.
 
 ### Chromium no arranca
 
 El workflow ya instala las librerías del sistema con
-`python -m playwright install --with-deps chromium`. En local, si faltan
-dependencias, consulta [`Install_dependences.md`](../Install_dependences.md).
+`python -m playwright install --with-deps chromium --only-shell`. En local, si
+faltan dependencias, consulta [`Install_dependences.md`](../Install_dependences.md).
 
 ### El workflow supera el tiempo límite
 
