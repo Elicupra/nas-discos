@@ -790,12 +790,92 @@
     if (!isSearch) renderHistory();
   }
 
-  // ── búsqueda en vivo ──────────────────────────────────────────────────
+  function openScopeModal() {
+    if (!LIVE) {
+      toast('La búsqueda acotada requiere el servidor (python nas_discos.py).');
+      return;
+    }
+    $('#scopemodal').hidden = false;
+    const sources = scopeSources();
+    if (scopeSelectedStores.size === 0 && sources.length) {
+      sources.forEach((s) => scopeSelectedStores.add(s.name.split(' · ')[0]));
+    }
+    $('#scopestores').innerHTML = sources.map((s) => {
+      const base = s.name.split(' · ')[0];
+      const checked = scopeSelectedStores.has(base) ? 'checked' : '';
+      return `<label class="check"><input type="checkbox" data-scope-store="${esc(base)}" ${checked}> ${esc(base)}</label>`;
+    }).join('');
+    $('#scopekind').value = '';
+    $('#scopetext').value = '';
+    $('#scopemin').value = '';
+    $('#scopemax').value = '';
+  }
+
+  function closeScopeModal() {
+    $('#scopemodal').hidden = true;
+  }
+
+  function readScope() {
+    const stores = [];
+    $$('[data-scope-store]').forEach((input) => {
+      if (input.checked) stores.push(input.dataset.scopeStore);
+    });
+    const kind = $('#scopekind').value;
+    const text = ($('#scopetext').value || '').trim();
+    const capMin = $('#scopemin').value;
+    const capMax = $('#scopemax').value;
+    const result = {};
+    if (stores.length) result.stores = stores;
+    if (kind) result.kind = kind;
+    if (text) result.text = text;
+    if (capMin !== '') result.cap_min = Number(capMin);
+    if (capMax !== '') result.cap_max = Number(capMax);
+    result.summary = scopeSummary(result);
+    return Object.keys(result).length > 1 ? result : null;
+  }
+
+  function scopeSummary(scope) {
+    const parts = [];
+    if (scope.kind) parts.push(scope.kind);
+    if (scope.stores) parts.push(`${scope.stores.length} tienda(s)`);
+    if (scope.text) parts.push(`texto: ${scope.text}`);
+    if (scope.cap_min != null || scope.cap_max != null) {
+      parts.push(`cap: ${scope.cap_min || 0}–${scope.cap_max || '∞'} GB`);
+    }
+    return parts.join(' · ') || 'acotada';
+  }
+
+  const scopeSelectedStores = new Set();
+
   const btn = $('#re');
   function setBtn(text, disabled, percent) {
     btn.disabled = disabled;
     $('#relabel').textContent = text;
     $('#fill').style.width = (percent || 0) + '%';
+  }
+
+  async function refresh(scope = null) {
+    if (!LIVE) return;
+    setBtn(scope ? 'Iniciando acotada…' : 'Iniciando…', true, 2);
+    openSearchModal();
+    try {
+      const response = await fetch('/api/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scope ? { scope } : {}),
+      });
+      if (response.status === 429) {
+        closeSearchModal();
+        const data = await response.json();
+        cooldown(data.cooldown || 0);
+        return;
+      }
+      poll();
+    } catch (error) {
+      closeSearchModal();
+      setBtn('Buscar', false, 0);
+      $('#rehint').textContent = 'No se pudo iniciar la búsqueda.';
+    }
   }
 
   let cooldownTimer;
@@ -821,7 +901,22 @@
     const data = await fetch('/api/data').then((response) => response.json());
     D = data || EMPTY;
     FAV = new Set(D.favorites || []);
+    fillScopeStores();
     render();
+  }
+
+  function scopeSources() {
+    return D.available_sources
+      || (D.meta && D.meta.sources)
+      || [];
+  }
+
+  function fillScopeStores() {
+    const sources = scopeSources();
+    if (!sources.length) return;
+    if (scopeSelectedStores.size === 0) {
+      sources.forEach((s) => scopeSelectedStores.add(s.name.split(' · ')[0]));
+    }
   }
 
   async function poll() {
@@ -858,6 +953,9 @@
 
   function updateSearchModal(status) {
     $('#slabel').textContent = status.label || 'Buscando…';
+    if (status.scope) {
+      $('#slabel').textContent += ` · ${status.scope}`;
+    }
     const stores = status.stores || {};
     const order = Object.keys(stores);
     if (!order.length) {
@@ -875,7 +973,9 @@
 
   async function boot() {
     initTheme();
-    if (!D || !D.items) {
+    // En modo servidor siempre refrescamos: la lista de fuentes para el
+    // selector de ámbito no va en el HTML inicial.
+    if (LIVE || !D || !D.items) {
       try { await fetchData(); } catch (error) { D = EMPTY; render(); }
     }
     initHistoryFromBoot();
@@ -1067,24 +1167,16 @@
     if (event.target.closest('[data-goto-history]')) showTab('history');
   });
 
-  btn.addEventListener('click', async () => {
-    if (!LIVE) return;
-    setBtn('Iniciando…', true, 2);
-    openSearchModal();
-    try {
-      const response = await fetch('/api/refresh', { method: 'POST' });
-      if (response.status === 429) {
-        closeSearchModal();
-        const data = await response.json();
-        cooldown(data.cooldown || 0);
-        return;
-      }
-      poll();
-    } catch (error) {
-      closeSearchModal();
-      setBtn('Buscar', false, 0);
-      $('#rehint').textContent = 'No se pudo iniciar la búsqueda.';
-    }
+  btn.addEventListener('click', () => refresh());
+  $('#rescoped').addEventListener('click', openScopeModal);
+  $('#scopego').addEventListener('click', () => {
+    const scope = readScope();
+    closeScopeModal();
+    refresh(scope);
+  });
+  $('#scopecancel').addEventListener('click', closeScopeModal);
+  $('#scopemodal').addEventListener('click', (event) => {
+    if (event.target === $('#scopemodal')) closeScopeModal();
   });
 
   boot();

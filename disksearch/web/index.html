@@ -13,7 +13,7 @@
 <body><div class="wrap">
 <header>
   <div>
-    <h1>Discos duros internos</h1>
+    <h1>Discos duros internos y SSD</h1>
     <p class="sub">HDD de 2,5" y 3,5" y SSD internos SATA o M.2, sin límites de capacidad. Un producto por modelo y tipo, con su mejor precio.</p>
   </div>
   <div class="head-actions">
@@ -23,6 +23,7 @@
       <button type="button" class="chip" data-theme-opt="dark" aria-pressed="false" title="Modo oscuro">Oscuro</button>
     </div>
     <button id="re" type="button"><i class="fill" id="fill"></i><span id="relabel">Buscar</span></button>
+    <button id="rescoped" type="button" class="ghost">Buscar acotada</button>
     <div class="foot" id="rehint"></div>
   </div>
 </header>
@@ -31,6 +32,27 @@
   <button id="tab-search" class="tab" role="tab" aria-selected="false" aria-controls="view-search">Resultados</button>
   <button id="tab-history" class="tab" role="tab" aria-selected="true" aria-controls="view-history">Histórico <span id="histbadge" class="badge" hidden></span></button>
 </nav>
+
+<div id="scopemodal" class="modal" hidden role="dialog" aria-modal="true" aria-label="Ámbito de la búsqueda acotada">
+  <div class="modal-box">
+    <h3>Buscar acotada</h3>
+    <p class="foot">Solo se consultan las tiendas y productos seleccionados. No marca ausencias.</p>
+    <div class="scope-form">
+      <label>Tiendas</label>
+      <div id="scopestores" class="chips"></div>
+      <label for="scopekind">Tipo</label>
+      <select id="scopekind"><option value="">HDD y SSD</option><option value="HDD">Solo HDD</option><option value="SSD">Solo SSD</option></select>
+      <label for="scopetext">Texto</label>
+      <input id="scopetext" type="search" placeholder="marca o modelo">
+      <label>Capacidad (GB)</label>
+      <div class="row"><input id="scopemin" type="number" min="0" placeholder="mín"><span>—</span><input id="scopemax" type="number" min="0" placeholder="máx"></div>
+    </div>
+    <div class="actions">
+      <button id="scopego" type="button">Buscar</button>
+      <button id="scopecancel" type="button" class="ghost">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 <div id="notice" class="notice" hidden></div>
 

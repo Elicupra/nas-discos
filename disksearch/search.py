@@ -51,10 +51,62 @@ def _search_steps(sources):
     return sum(1 for source in sources for _ in source_requests(source)) or 1
 
 
-def run_search(progress=lambda *_: None, debug=False, sources=None):
+def _matches_scope(item, scope):
+    """Filtra un ítem ya parseado según el ámbito textual y de capacidad."""
+    if not scope:
+        return True
+    text = scope.get("text", "").lower().strip()
+    kind = scope.get("kind")
+    cap_min = scope.get("cap_min")
+    cap_max = scope.get("cap_max")
+    if kind and item.get("kind") != kind:
+        return False
+    if text and text not in f"{item.get('brand', '')} {item.get('model', '')} {item.get('title', '')}".lower():
+        return False
+    gb = item.get("capacity_gb")
+    if cap_min is not None and (gb is None or gb < cap_min):
+        return False
+    if cap_max is not None and (gb is None or gb > cap_max):
+        return False
+    return True
+
+
+def _scope_sources(scope):
+    """Devuelve las fuentes que entran en el ámbito y su nombre base."""
+    if not scope:
+        return [s for s in config.SOURCES if s.get("enabled", True)]
+    names = {n.strip() for n in (scope.get("stores") or []) if n.strip()}
+    out = []
+    for source in config.SOURCES:
+        if not source.get("enabled", True):
+            continue
+        base = source["name"].split(" · ")[0]
+        if not names or base in names or source["name"] in names:
+            out.append(source)
+    return out
+
+
+def _scope_summary(scope):
+    if not scope:
+        return None
+    parts = []
+    if scope.get("kind"):
+        parts.append(scope["kind"])
+    if scope.get("stores"):
+        parts.append(f"{len(scope['stores'])} tienda(s)")
+    if scope.get("text"):
+        parts.append(f"texto: {scope['text']}")
+    cap_min = scope.get("cap_min")
+    cap_max = scope.get("cap_max")
+    if cap_min is not None or cap_max is not None:
+        parts.append(f"cap: {cap_min or 0}–{cap_max or '∞'} GB")
+    return " · ".join(parts) or "acotada"
+
+
+def run_search(progress=lambda *_: None, debug=False, sources=None, scope=None):
     import requests
 
-    sources = [s for s in (sources or config.SOURCES) if s.get("enabled", True)]
+    sources = [s for s in (sources or _scope_sources(scope)) if s.get("enabled", True)]
     http = requests.Session()
     http.headers.update(config.HEADERS)
     playwright = browser = context = None
@@ -95,6 +147,7 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
     raw, pages_ok, per_source, seen = [], 0, [], set()
     steps = _search_steps(sources)
     done = 0
+    scope_summary = _scope_summary(scope)
     try:
         for source in sources:
             ok_pages = items = 0
@@ -147,6 +200,11 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                         new = []
                         for item in found:
                             item["url"] = normalize_url(item.get("url", ""), url)
+                            # Aplicar ámbito de tipo/texto/capacidad en el
+                            # extractor, antes de gastar memoria en productos
+                            # que no interesan.
+                            if not _matches_scope(item, scope):
+                                continue
                             if item["url"] not in seen:
                                 seen.add(item["url"])
                                 new.append(item)
@@ -190,12 +248,13 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                 "note": note,
                 # Solo se usa para detectar ausencias si la tienda respondió
                 # completa y correctamente. Un bloqueo, un HTTP raro, una
-                # paginación ignorada o una fuente agregadora no deben marcar
-                # productos como ausentes.
+                # paginación ignorada, una fuente agregadora o una búsqueda
+                # acotada no deben marcar productos como ausentes.
                 "ok": bool(
                     ok_pages and items
                     and not blocked_any and not failed_any and not pagination_ignored
                     and not source.get("aggregator")
+                    and not bool(scope)
                 ),
             })
             final = per_source[-1]
@@ -216,7 +275,10 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
             context.close()
             browser.close()
             playwright.stop()
-    return build_dataset(raw, pages_ok, per_source)
+    data = build_dataset(raw, pages_ok, per_source)
+    data["meta"]["scope"] = scope_summary
+    data["meta"]["partial"] = bool(scope)
+    return data
 
 
 def build_dataset(raw, pages_ok, per_source):

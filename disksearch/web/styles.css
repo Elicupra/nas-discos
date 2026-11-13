@@ -81,6 +81,10 @@ td a{color:var(--acc);font-weight:600;text-decoration:none}td a:hover{text-decor
 .modal[hidden]{display:none}
 .modal-box{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;max-width:520px;width:92vw;max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 .modal-box h3{margin:0 0 6px}
+.scope-form{display:grid;gap:12px;margin:16px 0}
+.scope-form label{color:var(--mute);font-size:13px}
+.scope-form .row{display:flex;gap:10px;align-items:center}
+.scope-form .row span{color:var(--mute)}
 .srow{display:grid;grid-template-columns:minmax(110px,150px) 1fr auto;gap:10px;align-items:center;margin:7px 0;font-size:13px}
 .srow .bar{height:10px;border-radius:5px;background:var(--bar);overflow:hidden;display:block}
 .srow .bar u{display:block;height:100%;background:var(--acc);transition:width .4s}

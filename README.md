@@ -1,22 +1,29 @@
 # disk-search
 
-Buscador local de **discos duros internos HDD de 2,5" y 3,5"** en tiendas
-españolas. Compara precios, ordena y filtra los resultados, y guarda un
-histórico en SQLite con favoritos y avisos de productos que dejan de aparecer.
+Buscador local de **discos internos**: HDD de 2,5" y 3,5" y SSD SATA 2,5" y
+M.2/mSATA, en tiendas españolas. Compara precios, ordena y filtra los
+resultados, y guarda un histórico en SQLite con favoritos y avisos de productos
+que dejan de aparecer.
 
 La aplicación se ejecuta en tu equipo: no hay cuentas, servicios externos ni
 telemetría. Solo se consultan las páginas públicas de catálogo de las tiendas.
 
 ## Características
 
-- Búsqueda de HDD internos **sin límite artificial de capacidad**: desde
+- Búsqueda de HDD y SSD internos **sin límite artificial de capacidad**: desde
   modelos pequeños de 500 GB hasta discos de 32 TB.
+- Detección de **tipo** (HDD/SSD), **formato** (2,5", 3,5", M.2, mSATA) e
+  **interfaz** (SATA, NVMe, PCIe, SAS). Un SSD y un HDD del mismo modelo nunca
+  comparten ficha.
 - Agrupación por producto canónico: un modelo puede reunir ofertas de varias
   tiendas y se muestra el mejor precio.
 - Tabla ordenable por marca, modelo, capacidad, caché, formato, precio,
   €/TB, tienda, etc.
-- Filtros por texto, marca, formato, capacidad, interfaz, gama NAS, tienda y
-  favoritos.
+- Filtros por texto, marca, tipo (HDD/SSD), formato, capacidad, interfaz, gama
+  NAS, tienda y favoritos.
+- **Búsqueda acotada**: se puede limitar la búsqueda a un subconjunto de
+  tiendas, a un tipo, a un texto y/o a un rango de capacidad. Una búsqueda
+  acotada **nunca marca ausencias** ni cambia la disponibilidad del histórico.
 - Paginación de 25, 50 o 100 resultados.
 - Histórico SQLite con todos los modelos vistos, precios, ofertas por tienda y
   última fecha de aparición.
@@ -32,8 +39,9 @@ telemetría. Solo se consultan las páginas públicas de catálogo de las tienda
 - Vistas de histórico por producto (tabla con máximos, medios, mínimos,
   precios actuales y variaciones; gráfica de línea; barras por día, tienda o
   producto) con comparativa entre productos.
-- Código preparado para añadir SSD, NVMe y discos externos en el futuro, y un
-  adaptador documentado para PocketBase.
+- Los discos externos, portátiles, carcasas y packs quedan fuera del alcance.
+- Código preparado para añadir más tiendas en el futuro, y un adaptador
+  documentado para PocketBase.
 
 ## Fuentes
 
@@ -46,7 +54,13 @@ Fuentes activas:
 | Amazon.es | Chromium real con Playwright |
 | LDLC | Petición HTTP |
 | Coolmod | Petición HTTP |
+| Geeknetic · agregado | Petición HTTP (comparador) |
 | Alternate.es | Petición HTTP |
+
+Geeknetic es un **comparador (agregador)**, no una tienda: sus precios son
+«desde» y se usan como respaldo y para descubrir SSD/M.2. Nunca se siguen sus
+enlaces de afiliado `ver-tienda` ni las fichas de producto. Por ser agregador,
+**no se usa para detectar ausencias**.
 
 Las pausas entre peticiones son deliberadas. No se intenta evadir captchas ni
 se usan páginas distintas de los catálogos públicos. Si una tienda bloquea la
@@ -92,6 +106,13 @@ lanza sola: pulsa «Buscar» y verás un panel con el progreso de cada tienda.
 Al terminar saltas a Resultados y puedes repetir la búsqueda cuando pase el
 tiempo de espera (cooldown).
 
+Junto a «Buscar» hay un botón **«Buscar acotada»** para limitar la búsqueda a
+un subconjunto de tiendas, a un tipo (HDD/SSD), a un texto (marca/modelo) y/o a
+un rango de capacidad. Solo se consultan las fuentes del ámbito y, al
+registrarla, el histórico se actualiza o amplía pero **no se marcan ausencias**
+ni se cambia la disponibilidad: esa información solo la produce una búsqueda
+completa.
+
 ### Datos de ejemplo, sin internet
 
 ```bash
@@ -121,6 +142,16 @@ favoritos no se guardan; para eso hace falta el servidor.
 --no-open     no abre el navegador al arrancar el servidor
 --db RUTA     ruta alternativa para la base SQLite del histórico
 --port N      puerto del servidor (por defecto 8765)
+--kind TIPO   acota la búsqueda a HDD o SSD
+--store TIENDA tienda a consultar (repetible); acota la búsqueda
+--text TEXTO  acota la búsqueda a marca/modelo
+```
+
+`--kind`, `--store` y `--text` marcan la búsqueda como **acotada** (no detecta
+ausencias). Por ejemplo, para buscar solo SSD en PcBox:
+
+```bash
+python nas_discos.py --once --kind SSD --store PcBox
 ```
 
 ## Ejecución diaria en GitHub Actions
@@ -226,8 +257,8 @@ docs/                      documentación de despliegue
 scripts/                   utilidades de ejecución local
 disksearch/
   config.py                fuentes, límites de red y rutas
-  parsing.py               precios, capacidades, formatos y claves canónicas
-  extractors.py            extractores genéricos y por tienda
+  parsing.py               precios, capacidades, tipos, formatos y claves canónicas
+  extractors.py            extractores genéricos, por tienda y del agregador
   search.py                búsqueda, agregación y dataset de demo
   history.py               interfaz de histórico + implementación SQLite
   server.py                servidor HTTP y API local
@@ -243,15 +274,15 @@ El servidor expone una API sencilla en `127.0.0.1`:
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/api/status` | Estado de la búsqueda, progreso por tienda y tiempo de espera |
-| `GET` | `/api/data` | Resultados actuales y favoritos |
-| `GET` | `/api/history` | Histórico paginado y filtrable |
+| `GET` | `/api/status` | Estado, progreso por tienda, tiempo de espera y ámbito actual |
+| `GET` | `/api/data` | Resultados actuales, favoritos y fuentes disponibles |
+| `GET` | `/api/history` | Histórico paginado y filtrable (acepta `kind=HDD\|SSD`) |
 | `GET` | `/api/history/<key>` | Detalle de un producto |
 | `GET` | `/api/notifications` | Avisos activos |
 | `GET` | `/api/stats` | Totales del histórico |
 | `GET` | `/api/searches` | Búsquedas recientes |
 | `GET` | `/api/series` | Serie diaria de precios por producto (gráficas) |
-| `POST` | `/api/refresh` | Inicia una nueva búsqueda |
+| `POST` | `/api/refresh` | Inicia una búsqueda (acepta `{"scope": {...}}` para acotarla) |
 | `POST` | `/api/favorites` | Marca o desmarca un favorito |
 | `POST` | `/api/notifications/dismiss` | Descarta un aviso |
 
@@ -272,10 +303,12 @@ python nas_discos.py --demo --no-open
 
 ## Limitaciones
 
-- Solo se buscan **HDD internos de 2,5" y 3,5"**. SSD, NVMe y discos externos
-  están fuera del alcance actual, aunque la arquitectura ya los contempla.
+- Se buscan **HDD y SSD internos**. Los discos externos, portátiles, carcasas,
+  docks y packs están fuera del alcance.
 - Los precios y la disponibilidad cambian; la aplicación muestra la última
   observación, no una garantía en tiempo real.
+- Los precios de Geeknetic son «desde» y pueden ir con retraso: son un
+  respaldo, no sustituyen a la tienda directa.
 - Algunas tiendas aplican límites anti-bot. Si una fuente falla, el resto sigue
   funcionando y esa fuente no se usa para marcar ausencias.
 - La agrupación entre tiendas se apoya en marca, línea, capacidad, formato y

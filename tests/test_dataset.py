@@ -3,7 +3,9 @@ import unittest
 from pathlib import Path
 
 from disksearch.parsing import parse_spec, product_key
-from disksearch.search import build_dataset, demo_dataset
+from disksearch.search import (
+    _matches_scope, _scope_sources, build_dataset, demo_dataset,
+)
 
 
 class DatasetTests(unittest.TestCase):
@@ -71,6 +73,27 @@ class DatasetTests(unittest.TestCase):
         self.assertTrue(any(item["form_factor"] == "M.2" for item in ssd))
         self.assertTrue(any(item["interface"] == "NVMe" for item in ssd))
         self.assertTrue(any(item["interface"] == "SATA" for item in ssd))
+
+    def test_matches_scope_by_kind_text_and_capacity(self):
+        hdd = {"brand": "Seagate", "model": "IronWolf", "title": "Disco 4TB",
+               "kind": "HDD", "capacity_gb": 4000}
+        ssd = {"brand": "Samsung", "model": "990 PRO", "title": "SSD 2TB",
+               "kind": "SSD", "capacity_gb": 2000}
+        self.assertTrue(_matches_scope(hdd, None))
+        self.assertTrue(_matches_scope(hdd, {"kind": "HDD"}))
+        self.assertFalse(_matches_scope(hdd, {"kind": "SSD"}))
+        self.assertTrue(_matches_scope(ssd, {"kind": "SSD", "text": "samsung"}))
+        self.assertFalse(_matches_scope(ssd, {"kind": "SSD", "text": "seagate"}))
+        self.assertTrue(_matches_scope(ssd, {"cap_min": 1000, "cap_max": 3000}))
+        self.assertFalse(_matches_scope(ssd, {"cap_min": 4000}))
+        self.assertFalse(_matches_scope(ssd, {"cap_max": 1000}))
+
+    def test_scope_sources_filters_by_store_name(self):
+        from disksearch import config
+        all_sources = _scope_sources(None)
+        self.assertEqual(len(all_sources), len([s for s in config.SOURCES if s.get("enabled", True)]))
+        scoped = _scope_sources({"stores": ["PcBox"]})
+        self.assertEqual([s["name"] for s in scoped], ["PcBox"])
 
     def test_dataset_completes_ssd_format_within_same_kind(self):
         raw = [

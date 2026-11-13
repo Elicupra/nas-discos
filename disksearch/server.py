@@ -21,19 +21,31 @@ STATE = {
     "history_error": "",
     "last": 0.0,
     "stores": {},
+    "scope": None,
 }
 LOCK = threading.Lock()
 
 
+def configured_sources():
+    """Fuentes disponibles para el selector de búsqueda acotada."""
+    return [
+        {"name": source["name"], "aggregator": bool(source.get("aggregator"))}
+        for source in config.SOURCES if source.get("enabled", True)
+    ]
+
+
 def empty_data():
     return {
-        "meta": {"time": "—", "pages": 0, "raw": 0, "unique": 0, "shown": 0, "sources": []},
+        "meta": {
+            "time": "—", "pages": 0, "raw": 0, "unique": 0, "shown": 0,
+            "sources": configured_sources(),
+        },
         "items": [],
         "highlights": {},
     }
 
 
-def worker(demo, debug, store):
+def worker(demo, debug, store, scope=None):
     try:
         def progress(value, label, store_name=None, info=None):
             STATE.update(progress=value, label=label)
@@ -48,14 +60,23 @@ def worker(demo, debug, store):
 
         if demo:
             # simulación de progreso por tienda para la demo
-            for name in ("PCComponentes", "Coolmod", "Alternate", "Amazon"):
+            names = [s["name"] for s in config.SOURCES if s.get("enabled", True)]
+            for name in names[:4]:
                 STATE["stores"][name] = {"state": "buscando", "results": None}
-                time.sleep(0.6)
+                time.sleep(0.4)
                 STATE["stores"][name] = {"state": "ok", "results": 30}
-            time.sleep(1)
+            time.sleep(0.5)
             data = demo_dataset()
+            if scope:
+                data["meta"]["scope"] = scope.get("summary")
+                data["meta"]["partial"] = True
+                # Demo: si se acota por tipo, filtrar ítems ya generados.
+                kind = scope.get("kind")
+                if kind:
+                    data["items"] = [i for i in data["items"] if i["kind"] == kind]
+                    data["meta"]["unique"] = data["meta"]["shown"] = len(data["items"])
         else:
-            data = run_search(progress, debug)
+            data = run_search(progress, debug, scope=scope)
         try:
             store.record_search(data)
             STATE["history_error"] = ""
@@ -73,13 +94,16 @@ def worker(demo, debug, store):
         STATE.update(running=False, progress=1.0, last=time.time())
 
 
-def start(demo, debug, store):
+def start(demo, debug, store, scope=None):
     with LOCK:
         wait = config.COOLDOWN - (time.time() - STATE["last"])
         if STATE["running"] or wait > 0:
             return False, max(0, int(wait))
-        STATE.update(running=True, progress=0.0, label="", error="", history_error="", stores={})
-    threading.Thread(target=worker, args=(demo, debug, store), daemon=True).start()
+        STATE.update(
+            running=True, progress=0.0, label="", error="", history_error="",
+            stores={}, scope=scope,
+        )
+    threading.Thread(target=worker, args=(demo, debug, store, scope), daemon=True).start()
     return True, 0
 
 
@@ -106,7 +130,7 @@ def make_handler(demo, debug, store):
             )
             return {
                 key: STATE[key]
-                for key in ("running", "progress", "label", "error", "history_error", "stores")
+                for key in ("running", "progress", "label", "error", "history_error", "stores", "scope")
             } | {"cooldown": cooldown}
 
         def _read_json(self):
@@ -130,6 +154,8 @@ def make_handler(demo, debug, store):
                 elif path == "/api/data":
                     data = dict(STATE["data"] or empty_data())
                     data["favorites"] = store.favorites()
+                    # Lista completa (sin acotar) para el selector de ámbito.
+                    data["available_sources"] = configured_sources()
                     self._json(200, data)
                 elif path == "/api/history":
                     listing = store.list_products(
@@ -170,7 +196,9 @@ def make_handler(demo, debug, store):
             path = urlsplit(self.path).path
             try:
                 if path == "/api/refresh":
-                    ok, wait = start(demo, debug, store)
+                    payload = self._read_json()
+                    scope = payload.get("scope") if isinstance(payload, dict) else None
+                    ok, wait = start(demo, debug, store, scope=scope)
                     self._json(200 if ok else 429, {"started": ok, "cooldown": wait})
                 elif path == "/api/favorites":
                     payload = self._read_json()

@@ -24,7 +24,7 @@ from disksearch.extractors import (  # noqa: F401 - compatibilidad con imports a
 )
 from disksearch.parsing import parse_price, parse_spec, product_key  # noqa: F401
 from disksearch.search import (  # noqa: F401
-    build_dataset, demo_dataset, highlights, run_search,
+    _scope_summary, build_dataset, demo_dataset, highlights, run_search,
 )
 from disksearch.server import build_store, serve
 from disksearch.ui import history_snapshot, render_history_html, render_html
@@ -43,17 +43,48 @@ def main():
     parser.add_argument("--historico-html", nargs="?", const="historico.html", default=None,
                         help="genera una página estática con el histórico y sale (opcional: ruta de salida)")
     parser.add_argument("--port", type=int, default=None, help=f"puerto (por defecto {config.PORT})")
+    parser.add_argument("--kind", choices=("HDD", "SSD"), help="acota la búsqueda a un tipo")
+    parser.add_argument("--store", action="append", default=None,
+                        help="tienda a consultar (repetible); acota la búsqueda")
+    parser.add_argument("--text", default="", help="texto a buscar en marca/modelo")
     args = parser.parse_args()
 
     config.HEADED = args.headed
     store = build_store(demo=args.demo, path=args.db)
 
+    scope = {}
+    if args.kind:
+        scope["kind"] = args.kind
+    if args.store:
+        scope["stores"] = args.store
+    if args.text:
+        scope["text"] = args.text
+    scope = scope or None
+
     if args.once:
         try:
-            data = demo_dataset() if args.demo else run_search(
-                lambda p, label: print(f"{p:4.0%} {label}", file=sys.stderr),
-                args.debug,
-            )
+            if args.demo:
+                data = demo_dataset()
+                if scope:
+                    data["meta"]["partial"] = True
+                    data["meta"]["scope"] = _scope_summary(scope)
+                    if scope.get("kind"):
+                        data["items"] = [
+                            item for item in data["items"]
+                            if item["kind"] == scope["kind"]
+                        ]
+                    if scope.get("stores"):
+                        stores = set(scope["stores"])
+                        data["items"] = [
+                            item for item in data["items"]
+                            if item.get("store") in stores
+                        ]
+                    data["meta"]["unique"] = data["meta"]["shown"] = len(data["items"])
+            else:
+                data = run_search(
+                    lambda p, label: print(f"{p:4.0%} {label}", file=sys.stderr),
+                    args.debug, scope=scope,
+                )
             try:
                 store.record_search(data)
             except Exception as exc:

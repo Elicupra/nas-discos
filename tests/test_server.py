@@ -77,6 +77,10 @@ class ServerTests(unittest.TestCase):
         notices = self.get_json("/api/notifications")
         self.assertIn("items", notices)
 
+    def test_status_exposes_scope(self):
+        status = self.get_json("/api/status")
+        self.assertIn("scope", status)
+
     def test_invalid_favorite_is_rejected(self):
         request = Request(
             self.base + "/api/favorites",
