@@ -138,7 +138,8 @@
     $('#srcs').innerHTML = sources.map((source) => {
       const bad = source.note ? ' class="bad"' : '';
       const note = source.note ? ' — ' + esc(source.note) : '';
-      return `<span${bad}>${esc(source.name)}: ${source.items || 0} productos${note}</span>`;
+      const label = source.aggregator ? `${esc(source.name)} · agregado` : esc(source.name);
+      return `<span${bad}>${label}: ${source.items || 0} productos${note}</span>`;
     }).join('');
   }
 

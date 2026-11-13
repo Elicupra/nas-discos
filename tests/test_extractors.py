@@ -1,11 +1,15 @@
 import json
 import unittest
+from pathlib import Path
 
 from disksearch.extractors import (
-    extract_alternate, extract_amazon, extract_coolmod, extract_products,
+    extract_alternate, extract_amazon, extract_coolmod, extract_geeknetic,
+    extract_products,
 )
 from disksearch.parsing import parse_spec
 
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 JSONLD = """
 <script type="application/ld+json">
@@ -72,6 +76,29 @@ class ExtractorTests(unittest.TestCase):
         items = extract_amazon(AMAZON, "https://www.amazon.es/s?k=x", "Amazon.es")
         self.assertEqual(items[0]["price"], 199.95)
         self.assertEqual(items[0]["url"], "https://www.amazon.es/dp/B000TEST01")
+
+    def test_geeknetic_hdd_and_ssd(self):
+        hdd_html = (FIXTURES / "geeknetic_hdd.html").read_text(encoding="utf-8")
+        ssd_html = (FIXTURES / "geeknetic_ssd.html").read_text(encoding="utf-8")
+        hdd = extract_geeknetic(hdd_html, "https://www.geeknetic.es/comparador-precios/discos-duros/", "Geeknetic · agregado")
+        ssd = extract_geeknetic(ssd_html, "https://www.geeknetic.es/comparador-precios/ssds/", "Geeknetic · agregado")
+        self.assertGreater(len(hdd), 30)
+        self.assertGreater(len(ssd), 30)
+        # Todos traen hints y URL a la ficha, nunca a ver-tienda.
+        for item in hdd + ssd:
+            self.assertTrue(item["hints"])
+            self.assertIsNotNone(item["price"])
+            self.assertNotIn("ver-tienda", item["url"])
+        # Al menos un HDD 3.5" SATA y un SSD M.2 NVMe.
+        self.assertTrue(any(i["hints"].get("form_factor") == "3.5" for i in hdd))
+        self.assertTrue(any(i["hints"].get("interface") == "SATA" for i in hdd))
+        self.assertTrue(any(i["hints"].get("form_factor") == "M.2" for i in ssd))
+        self.assertTrue(any(i["hints"].get("interface") == "NVMe" for i in ssd))
+        # Se integran en build_dataset con parse_spec.
+        for item in hdd + ssd:
+            spec = parse_spec(item["name"], item["brand"], item.get("hints"))
+            self.assertIsNotNone(spec, item["name"])
+            self.assertEqual(spec["kind"], item["hints"]["kind"])
 
 
 if __name__ == "__main__":

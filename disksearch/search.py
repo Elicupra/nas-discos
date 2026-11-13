@@ -13,6 +13,7 @@ from .extractors import (
     extract_alternate,
     extract_amazon,
     extract_coolmod,
+    extract_geeknetic,
     extract_products,
     extract_vtex,
     normalize_url,
@@ -137,6 +138,8 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                                 found = extract_coolmod(html, url, source["name"])
                             elif mode == "alternate":
                                 found = extract_alternate(html, url, source["name"])
+                            elif mode == "geeknetic":
+                                found = extract_geeknetic(html, url, source["name"])
                             else:
                                 found = extract_products(html, url, source["name"])
                             ok_pages += 1
@@ -186,11 +189,13 @@ def run_search(progress=lambda *_: None, debug=False, sources=None):
                 "items": items,
                 "note": note,
                 # Solo se usa para detectar ausencias si la tienda respondió
-                # completa y correctamente. Un bloqueo, un HTTP raro o una
-                # paginación ignorada no deben marcar productos como ausentes.
+                # completa y correctamente. Un bloqueo, un HTTP raro, una
+                # paginación ignorada o una fuente agregadora no deben marcar
+                # productos como ausentes.
                 "ok": bool(
                     ok_pages and items
                     and not blocked_any and not failed_any and not pagination_ignored
+                    and not source.get("aggregator")
                 ),
             })
             final = per_source[-1]
