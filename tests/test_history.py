@@ -89,6 +89,26 @@ class HistoryTests(unittest.TestCase):
         product = self.store.get_product(key)["product"]
         self.assertEqual(product["available"], 1)
 
+    def test_list_products_and_series_include_kind(self):
+        raw = [
+            dict(name='Seagate IronWolf 4TB 3.5" ST4000VN006', brand='Seagate',
+                 price=100.0, url='https://shop/hdd', store='Shop'),
+            dict(name='Samsung 990 PRO 2TB SSD M.2 NVMe', brand='Samsung',
+                 price=150.0, url='https://shop/ssd', store='Shop'),
+        ]
+        data = build_dataset(
+            raw, 1,
+            [{"name": "Shop", "pages": 1, "items": 2, "note": "", "ok": True}],
+        )
+        self.store.record_search(data)
+        hdd = self.store.list_products(kind="HDD")
+        ssd = self.store.list_products(kind="SSD")
+        self.assertEqual(hdd["total"], 1)
+        self.assertEqual(ssd["total"], 1)
+        self.assertEqual(hdd["items"][0]["kind"], "HDD")
+        self.assertEqual(ssd["items"][0]["kind"], "SSD")
+        self.assertEqual({s["kind"] for s in self.store.price_series()}, {"HDD", "SSD"})
+
     def test_dismiss_notification(self):
         first = make_data([4])
         self.store.record_search(first)

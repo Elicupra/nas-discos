@@ -16,6 +16,15 @@
     if (!n) return '—';
     return n >= 1000 ? `${(n / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} TB` : `${n} GB`;
   };
+  // El formato solo lleva comilla en los tamaños de HDD/SSD de 2,5" y 3,5".
+  const fmtForm = (item) => {
+    const value = item && item.form_factor;
+    if (!value) return '—';
+    return ['2.5', '3.5'].includes(value) ? `${value}"` : value;
+  };
+  const kindLabel = (item) => item && item.kind === 'SSD'
+    ? '<span class="kind ssd">SSD</span>'
+    : '<span class="kind hdd">HDD</span>';
 
   const EMPTY = { meta: { time: '—', pages: 0, raw: 0, unique: 0, shown: 0, sources: [] }, items: [], highlights: {} };
   let D = DATA || EMPTY;
@@ -30,6 +39,7 @@
     expanded: null, details: {}, loaded: false,
     series: [], compare: [], compareOn: false, detailView: 'table', barMode: 'day',
     from: '', to: '', pmin: '', pmax: '', form: '', change: false, stores: [],
+    kind: '',
   };
 
   // ── filtros del histórico persistentes ────────────────────────────────
@@ -39,6 +49,7 @@
         q: hstate.q, status: hstate.status, favorites: hstate.favorites,
         from: hstate.from, to: hstate.to, pmin: hstate.pmin, pmax: hstate.pmax,
         form: hstate.form, change: hstate.change, stores: hstate.stores,
+        kind: hstate.kind,
       }));
     } catch (error) { /* sin localStorage: no pasa nada */ }
   }
@@ -50,6 +61,7 @@
         q: saved.q || '', status: saved.status || '', favorites: Boolean(saved.favorites),
         from: saved.from || '', to: saved.to || '', pmin: saved.pmin || '', pmax: saved.pmax || '',
         form: saved.form || '', change: Boolean(saved.change), stores: saved.stores || [],
+        kind: saved.kind || '',
       });
     } catch (error) { /* datos corruptos: filtros por defecto */ }
     $('#hq').value = hstate.q;
@@ -59,6 +71,7 @@
     $('#hto').value = hstate.to;
     $('#hpmin').value = hstate.pmin;
     $('#hpmax').value = hstate.pmax;
+    $('#hkind').value = hstate.kind;
     $('#hform').value = hstate.form;
     $('#hchange').checked = hstate.change;
   }
@@ -109,10 +122,13 @@
 
   function renderStats() {
     const meta = D.meta || {};
+    const items = D.items || [];
+    const ssd = items.filter((item) => item.kind === 'SSD').length;
     $('#stats').innerHTML = [
       ['Hora de búsqueda', meta.time || '—'],
       ['Páginas encontradas', meta.pages || 0],
       ['Discos distintos', meta.unique || 0],
+      ['HDD / SSD', `${items.length - ssd} / ${ssd}`],
       ['Mostrados', meta.shown || 0],
     ].map(([label, value]) => `<div class="stat"><small>${label}</small><b>${esc(value)}</b></div>`).join('');
   }
@@ -131,7 +147,7 @@
     return `<div class="card" style="--c:${color}"><h3>${title}</h3>
       <div class="m">${esc(item.brand)} ${esc(item.model)}</div>
       <div class="p">${eur(item.price)}</div>
-      <div class="meta">${fmtCap(item.capacity_gb)} · ${item.cache ? item.cache + ' MB' : 'caché n/d'} · ${item.ppt == null ? '—' : eur(item.ppt) + '/TB'}${item.rating ? ` · ★ ${item.rating} (${item.reviews})` : ''} · ${esc(item.store)}</div>
+      <div class="meta">${esc(item.kind || 'HDD')} · ${fmtCap(item.capacity_gb)} · ${fmtForm(item)} · ${item.cache ? item.cache + ' MB' : 'caché n/d'} · ${item.ppt == null ? '—' : eur(item.ppt) + '/TB'}${item.rating ? ` · ★ ${item.rating} (${item.reviews})` : ''} · ${esc(item.store)}</div>
       <a href="${esc(item.url)}" target="_blank" rel="noopener">Ver producto</a></div>`;
   }
 
@@ -166,6 +182,7 @@
 
   function filteredItems() {
     const query = ($('#q').value || '').toLowerCase().trim();
+    const kind = $('#kind').value;
     const form = $('#form').value;
     const iface = $('#iface').value;
     const nas = $('#nas').value;
@@ -175,6 +192,7 @@
     const max = parseFloat($('#capmax').value);
     return (D.items || []).filter((item) => {
       if (state.brand && item.brand !== state.brand) return false;
+      if (kind && item.kind !== kind) return false;
       if (form && item.form_factor !== form) return false;
       if (iface && item.interface !== iface) return false;
       if (nas === 'yes' && !item.nas) return false;
@@ -239,10 +257,10 @@
     return `<tr>
       <td class="favcol"><button type="button" class="fav" data-fav="${esc(item.key)}" aria-pressed="${favorite}" aria-label="${favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}" title="${favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}">${favorite ? '★' : '☆'}</button></td>
       <td>${esc(item.brand)}</td>
-      <td><span class="model" title="${esc(item.title)}">${esc(item.model)}</span>${tagHtml(item)}</td>
+      <td><span class="model" title="${esc(item.title)}">${esc(item.model)}</span> ${kindLabel(item)}${tagHtml(item)}</td>
       <td><div class="cap"><b>${fmtCap(item.capacity_gb)}</b><i><u style="width:${width}%"></u></i></div></td>
       <td class="num">${item.cache ? item.cache + ' MB' : '—'}</td>
-      <td>${item.form_factor ? esc(item.form_factor) + '"' : '—'}</td>
+      <td>${fmtForm(item)}</td>
       <td class="num"><b>${eur(item.price)}</b>${item.offers > 1 ? `<div class="foot">${item.offers} ofertas</div>` : ''}</td>
       <td class="num">${item.ppt == null ? '—' : eur(item.ppt)}</td>
       <td title="${esc(item.title)}">${esc(item.store)}</td>
@@ -339,7 +357,7 @@
     const main = `<tr>
       <td class="favcol"><button type="button" class="fav" data-fav="${esc(item.key)}" aria-pressed="${favorite}" aria-label="${favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}">${favorite ? '★' : '☆'}</button></td>
       <td>${esc(item.brand)}</td>
-      <td><span class="model" title="${esc(item.title)}">${esc(item.model)}</span></td>
+      <td><span class="model" title="${esc(item.title)}">${esc(item.model)}</span> ${kindLabel(item)}</td>
       <td>${fmtCap(item.capacity_gb)}</td>
       <td class="num">${eur(item.last_price)}</td>
       <td class="num">${eur(item.best_price)}</td>
@@ -368,6 +386,7 @@
       if (hstate.favorites && !(FAV.has(item.key) || item.favorite)) return false;
       if (hstate.status === 'available' && !item.available) return false;
       if (hstate.status === 'missing' && item.available) return false;
+      if (hstate.kind && item.kind !== hstate.kind) return false;
       if (hstate.form && item.form_factor !== hstate.form) return false;
       if (hstate.change && item.last_price === item.best_price) return false;
       if (stores.size && !stores.has(item.last_store || item.store)) return false;
@@ -664,6 +683,7 @@
       offset: (hstate.page - 1) * hstate.pageSize,
       favorites: hstate.favorites ? '1' : '0',
       status: hstate.status,
+      kind: hstate.kind,
       q: hstate.q,
       sort: hstate.sort,
       direction: hstate.dir,
@@ -891,13 +911,13 @@
     button.addEventListener('click', () => setSort(button.dataset.key));
   });
 
-  ['#q', '#form', '#iface', '#nas', '#store', '#capmin', '#capmax'].forEach((selector) => {
+  ['#q', '#kind', '#form', '#iface', '#nas', '#store', '#capmin', '#capmax'].forEach((selector) => {
     $(selector).addEventListener('input', () => { state.page = 1; renderRows(); });
     $(selector).addEventListener('change', () => { state.page = 1; renderRows(); });
   });
   $('#favonly').addEventListener('change', () => { state.page = 1; renderRows(); });
   $('#reset').addEventListener('click', () => {
-    ['#q', '#form', '#iface', '#nas', '#store', '#capmin', '#capmax'].forEach((selector) => { $(selector).value = ''; });
+    ['#q', '#kind', '#form', '#iface', '#nas', '#store', '#capmin', '#capmax'].forEach((selector) => { $(selector).value = ''; });
     $('#favonly').checked = false;
     state.brand = '';
     state.page = 1;
@@ -929,6 +949,7 @@
     hstate.favorites = $('#hfav').checked;
     hstate.from = $('#hfrom').value; hstate.to = $('#hto').value;
     hstate.pmin = $('#hpmin').value; hstate.pmax = $('#hpmax').value;
+    hstate.kind = $('#hkind').value;
     hstate.form = $('#hform').value;
     hstate.change = $('#hchange').checked;
     hstate.expanded = null;
@@ -940,6 +961,7 @@
   function updateHApplyLabel() {
     const n = [
       hstate.q, hstate.from, hstate.to, hstate.pmin, hstate.pmax, hstate.form,
+      hstate.kind,
       hstate.status, hstate.change ? 'x' : '', hstate.favorites ? 'x' : '',
       ...hstate.stores,
     ].filter(Boolean).length;
@@ -952,10 +974,11 @@
   });
   $('#hreset').addEventListener('click', () => {
     ['#hq', '#hfrom', '#hto', '#hpmin', '#hpmax', '#hform'].forEach((selector) => { $(selector).value = ''; });
+    $('#hkind').value = '';
     $('#hstatus').value = '';
     $('#hchange').checked = false;
     $('#hfav').checked = false;
-    Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', change: false, favorites: false, status: '', stores: [] });
+    Object.assign(hstate, { q: '', from: '', to: '', pmin: '', pmax: '', form: '', kind: '', change: false, favorites: false, status: '', stores: [] });
     hstate.expanded = null;
     saveHFilters();
     updateHApplyLabel();

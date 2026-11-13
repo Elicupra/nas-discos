@@ -63,6 +63,29 @@ class DatasetTests(unittest.TestCase):
         self.assertGreater(len(data["items"]), 100)
         self.assertTrue(any(item["form_factor"] == "2.5" for item in data["items"]))
 
+    def test_demo_includes_ssd_sata_and_m2(self):
+        data = demo_dataset()
+        ssd = [item for item in data["items"] if item["kind"] == "SSD"]
+        self.assertTrue(ssd)
+        self.assertTrue(any(item["form_factor"] == "2.5" for item in ssd))
+        self.assertTrue(any(item["form_factor"] == "M.2" for item in ssd))
+        self.assertTrue(any(item["interface"] == "NVMe" for item in ssd))
+        self.assertTrue(any(item["interface"] == "SATA" for item in ssd))
+
+    def test_dataset_completes_ssd_format_within_same_kind(self):
+        raw = [
+            dict(name='Samsung 990 PRO 2TB SSD M.2 NVMe', brand='Samsung',
+                 price=150.0, url='https://a/ssd', store='A'),
+            dict(name='Samsung 990 PRO 2TB SSD NVMe', brand='Samsung',
+                 price=155.0, url='https://b/ssd', store='B'),
+        ]
+        data = build_dataset(raw, 2, [])
+        self.assertEqual(len(data["items"]), 1)
+        item = data["items"][0]
+        self.assertEqual(item["kind"], "SSD")
+        self.assertEqual(item["form_factor"], "M.2")
+        self.assertEqual(item["offers"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

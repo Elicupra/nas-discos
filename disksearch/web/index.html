@@ -14,7 +14,7 @@
 <header>
   <div>
     <h1>Discos duros internos</h1>
-    <p class="sub">HDD de 2,5" y 3,5", sin límites de capacidad. Un producto por modelo, con su mejor precio.</p>
+    <p class="sub">HDD de 2,5" y 3,5" y SSD internos SATA o M.2, sin límites de capacidad. Un producto por modelo y tipo, con su mejor precio.</p>
   </div>
   <div class="head-actions">
     <div class="theme" role="group" aria-label="Tema">
@@ -40,6 +40,7 @@
   <section class="hl" id="hl" aria-label="Destacados"></section>
   <div class="tools">
     <input id="q" type="search" placeholder="Filtrar por marca, modelo o tienda" aria-label="Filtrar resultados">
+    <select id="kind" aria-label="Tipo"><option value="">Tipo: todos</option><option value="HDD">HDD</option><option value="SSD">SSD</option></select>
     <select id="form" aria-label="Formato"><option value="">Formato: todos</option></select>
     <input id="capmin" type="number" min="0" step="0.1" placeholder="Cap. mín. TB" aria-label="Capacidad mínima en TB">
     <input id="capmax" type="number" min="0" step="0.1" placeholder="Cap. máx. TB" aria-label="Capacidad máxima en TB">
@@ -76,6 +77,7 @@
     <input id="hto" type="date" aria-label="Hasta fecha" title="Hasta">
     <input id="hpmin" type="number" min="0" step="1" placeholder="Precio mín. €" aria-label="Precio mínimo">
     <input id="hpmax" type="number" min="0" step="1" placeholder="Precio máx. €" aria-label="Precio máximo">
+    <select id="hkind" aria-label="Tipo"><option value="">Tipo: todos</option><option value="HDD">HDD</option><option value="SSD">SSD</option></select>
     <select id="hform" aria-label="Formato"><option value="">Formato: todos</option></select>
     <select id="hstatus" aria-label="Estado"><option value="">Estado: todos</option><option value="available">Disponibles</option><option value="missing">No disponibles</option></select>
     <select id="hsort" aria-label="Ordenar histórico">

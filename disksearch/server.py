@@ -140,6 +140,7 @@ def make_handler(demo, debug, store):
                         offset=query.get("offset", ["0"])[0],
                         sort=query.get("sort", ["last_seen"])[0],
                         direction=query.get("direction", ["desc"])[0],
+                        kind=query.get("kind", [""])[0],
                     )
                     listing["favorites"] = store.favorites()
                     self._json(200, listing)

@@ -2,7 +2,8 @@
 
 Para ampliar la búsqueda en el futuro solo hay que añadir fuentes aquí y, si su
 HTML lo requiere, un extractor en ``extractors.py``. Ahora mismo se buscan HDD
-internos de 2,5" y 3,5", sin límites artificiales de capacidad.
+internos de 2,5" y 3,5" y SSD internos SATA 2,5" y M.2/mSATA, sin límites
+artificiales de capacidad.
 """
 from __future__ import annotations
 
@@ -23,6 +24,8 @@ SOURCES = [
         "urls": [
             {"url": "https://www.pccomponentes.com/categorias/discos-duros/3-5-pulgadas?page={page}", "pages": 6},
             {"url": "https://www.pccomponentes.com/categorias/discos-duros/2-5-pulgadas?page={page}", "pages": 3},
+            # La página 2 de SSD cae en el reto anti-bot; con 1 página basta.
+            {"url": "https://www.pccomponentes.com/categorias/discos-duros/disco-ssd?page={page}", "pages": 1},
         ],
     },
     {
@@ -31,6 +34,7 @@ SOURCES = [
         "extract": "generic",
         "urls": [
             {"url": "https://www.pcbox.com/componentes-de-ordenador/discos-duros/discos-hdd?page={page}", "pages": 3},
+            {"url": "https://www.pcbox.com/componentes-de-ordenador/discos-duros/discos-ssd?page={page}", "pages": 7},
         ],
     },
     {
@@ -56,6 +60,7 @@ SOURCES = [
         "extract": "coolmod",
         "urls": [
             {"url": "https://www.coolmod.com/componentes-pc-discos-hdd/", "pages": 1},
+            {"url": "https://www.coolmod.com/componentes-pc-discos-ssd/", "pages": 1},
         ],
     },
     {
@@ -80,10 +85,9 @@ HEADERS = {
     "Accept-Language": "es-ES,es;q=0.9",
 }
 
-# Formatos aceptados actualmente. La UI y el modelo de datos ya están
-# preparados para añadir SSD/NVMe/externos más adelante.
-DISK_KINDS = ("HDD",)
-FORM_FACTORS = ("2.5", "3.5")
+# Formatos y tipos aceptados. La UI y el modelo de datos usan estos valores.
+DISK_KINDS = ("HDD", "SSD")
+FORM_FACTORS = ("2.5", "3.5", "M.2", "mSATA")
 
 DEFAULT_PAGE_SIZE = 25
 PAGE_SIZES = (25, 50, 100)

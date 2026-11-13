@@ -59,7 +59,7 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0]["price"], 199.95)
         self.assertIsNotNone(parse_spec(items[0]["name"]))
-        self.assertIsNone(parse_spec(items[1]["name"]))
+        self.assertEqual(parse_spec(items[1]["name"])["kind"], "SSD")
 
     def test_alternate(self):
         items = extract_alternate(ALTERNATE, "https://www.alternate.es/Discos-duros", "Alternate.es")

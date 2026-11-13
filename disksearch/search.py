@@ -219,22 +219,28 @@ def build_dataset(raw, pages_ok, per_source):
     parsed = []
     forms = {}
     for observation in raw:
-        spec = parse_spec(observation["name"], observation.get("brand", ""))
+        spec = parse_spec(
+            observation["name"], observation.get("brand", ""),
+            observation.get("hints"),
+        )
         price = observation.get("price")
         if not spec or not price:
             continue
         parsed.append((spec, observation, price))
         if spec.get("form_factor"):
-            identity = (spec["brand"], spec["model"], spec["capacity_gb"])
+            identity = (
+                spec["brand"], spec["model"], spec["capacity_gb"], spec["kind"],
+            )
             forms.setdefault(identity, set()).add(spec["form_factor"])
 
     # Algunas tiendas omiten el formato. Si otra tienda lo conoce para el
-    # mismo modelo y capacidad, y solo hay un formato posible, se completa
-    # antes de calcular la clave para no duplicar el producto.
+    # mismo modelo, capacidad y tipo, y solo hay un formato posible, se completa
+    # antes de calcular la clave para no duplicar el producto. Nunca se mezcla
+    # un HDD con un SSD del mismo nombre.
     for spec, _, _ in parsed:
         if spec.get("form_factor"):
             continue
-        identity = (spec["brand"], spec["model"], spec["capacity_gb"])
+        identity = (spec["brand"], spec["model"], spec["capacity_gb"], spec["kind"])
         known = forms.get(identity) or set()
         if len(known) == 1:
             spec["form_factor"] = spec["inch"] = next(iter(known))
@@ -378,6 +384,27 @@ def demo_dataset():
                 raw.append(dict(
                     name=name, brand=brand, price=price,
                     url="https://example.com/" + str(rnd.random())[2:8],
+                    rating=round(rnd.uniform(4.0, 4.9), 1) if rnd.random() < .8 else None,
+                    reviews=rnd.randint(3, 900), store=store,
+                ))
+    # SSD internos: SATA 2,5" y M.2 NVMe, con varias tiendas por producto.
+    ssd_lines = [
+        ("Samsung", "990 PRO", "M.2", "NVMe", 95),
+        ("Kingston", "NV3", "M.2", "NVMe", 60),
+        ("Crucial", "BX500", "2.5", "SATA", 55),
+        ("Western Digital", "SA510", "2.5", "SATA", 62),
+        ("Kioxia", "Exceria Plus G3", "M.2", "NVMe", 70),
+    ]
+    for gb in (500, 1000, 2000, 4000):
+        for store in ("PcComponentes", "Coolmod", "PcBox"):
+            for brand, line, form, iface, base in ssd_lines:
+                if rnd.random() < .35:
+                    continue
+                price = round((gb / 1000) * base * rnd.uniform(.85, 1.2) + 8, 2)
+                name = f"Disco SSD {brand} {line} {gb}GB {form} {iface}"
+                raw.append(dict(
+                    name=name, brand=brand, price=price,
+                    url="https://example.com/ssd-" + str(rnd.random())[2:8],
                     rating=round(rnd.uniform(4.0, 4.9), 1) if rnd.random() < .8 else None,
                     reviews=rnd.randint(3, 900), store=store,
                 ))
