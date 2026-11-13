@@ -125,6 +125,13 @@ jobs:
             echo "No hay HTML (la búsqueda no llegó a ejecutarse)"
           fi
 
+      # Se genera ANTES de cambiar a la rama `state`: ese checkout deja el
+      # árbol en una copia antigua del repo (sin `--historico-html`). `public/`
+      # está en .gitignore, así que el HTML sobrevive al checkout.
+      - name: Generar página estática del histórico
+        if: success()
+        run: python nas_discos.py --historico-html public/historico.html
+
       - name: Guardar histórico en la rama state
         if: success()
         run: |
@@ -145,10 +152,9 @@ jobs:
             git commit -m "history: $(date -u +%F) (${N_DISCOS:-?} discos)"
             git push origin state
           fi
-
-      - name: Generar página estática del histórico
-        if: success()
-        run: python nas_discos.py --historico-html public/historico.html
+          # Devuelve el árbol al commit del workflow para que los pasos
+          # siguientes usen el código actual, no el de la rama `state`.
+          git checkout --force "$GITHUB_SHA"
 
       # Opción B del issue #7: publicar el histórico en el repo público
       # Elicupra/nas-discos-pages con Pages activo (PAGES_TOKEN en Secrets).
