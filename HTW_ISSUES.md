@@ -20,8 +20,9 @@ proyecto desde la pestaña **Issues** de `Elicupra/nas-discos`.
 |---|---|---|
 | Sprint 0 | Histórico operativo en rama `state` | #2–#6 (resueltos) |
 | Sprint 1 | Publicar el histórico en GitHub | #7 (decisión), #8 (SPEC_8) |
-| Sprint 2 | UI del histórico | #9 (SPEC_9), #10 (SPEC_10) |
-| Backlog | Mejoras sin fecha | #11 y futuros |
+| Sprint 2 | UI del histórico | #9 (SPEC_9), #10 (SPEC_10), #13 (SPEC_11), #14 (SPEC_12) |
+| Sprint 3 | SSD, agregador y búsqueda acotada | #20 (SPEC_13), #21 (SPEC_14), #22 (SPEC_15) |
+| Backlog | Mejoras sin fecha | #11, #15, #23 y futuros |
 
 **Regla de avance:** no se empieza el sprint siguiente hasta que el actual
 no tenga issues abiertos (o se re-planifique).
@@ -50,14 +51,22 @@ labels `spec`/`incidencia`/`decision-pendiente` y milestones por sprint.)*
 5. Al cerrar, referenciar el issue en el mensaje de commit
    (`feat: ... (#9)`) para que quede enlazado.
 
-## Estado actual (2026-11-12)
+## Estado actual (2026-11-13)
 
-- Pendiente de cerrar a mano: **#2, #3, #4, #5, #6** (Sprint 0 resuelto) y
-  **#7** (decidido: opción A, artifact — comentar la decisión y cerrar).
-  El token de API no puede cerrar ni comentar issues.
-- Implementado: **#9 (SPEC_9)** y **#10 (SPEC_10)** en
-  `feat/historico-diario` (commits `9e9acef`, `d1bc16f`) → cerrar al hacer
-  merge a `main`. **#8 (SPEC_8)** implementado con la opción A del artifact
-  (commit `aac0f56`) → cerrar al hacer merge.
+Mergeado en `main` (PRs #17, #18, #19): SPEC_9, SPEC_10, SPEC_11, SPEC_12.
+Pendiente de mergear (ramas ya en `origin`, sin PR): SPEC_13 (#20, `feat/ssd-m2`),
+SPEC_14 (#21, `feat/geeknetic`) y SPEC_15 (#22, `feat/busqueda-acotada`).
+
+- **Cerrar a mano** (resuelto o decidido, el token de API no cierra issues):
+  - **#9 (SPEC_9)**: implementado y mergeado en PR #17.
+  - **#13 (SPEC_11)**: implementado y mergeado en PR #18.
+  - **#14 (SPEC_12)**: implementado y mergeado en PR #19.
+  - **#2 `test-permiso`**: prueba antigua, sin trabajo pendiente.
+- **Implementado, cerrar tras merge**: **#20, #21, #22** (SPEC_13/14/15).
+- **Abierto con decisión pendiente**: **#11** (recortar páginas).
+- **Abierto sin fecha**: **#15** (paralelismo real entre tiendas).
+- **Nuevo**: **#23** (`[Bug] --once rompe el callback de progreso`) →
+  `fix/once-progress`. Al mergear, el workflow diario vuelve a completar y
+  puede publicar en `nas-discos-pages`.
 - Milestones/labels: crearlos a mano en *Issues → Milestones/Labels*
   siguiendo la tabla de sprints (el token de API no tiene ese permiso).

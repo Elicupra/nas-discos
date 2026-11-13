@@ -30,6 +30,15 @@ from disksearch.server import build_store, serve
 from disksearch.ui import history_snapshot, render_history_html, render_html
 
 
+def cli_progress(value, label, store_name=None, info=None):
+    """Callback de progreso para ``--once``.
+
+    ``run_search`` avisa con ``(valor, etiqueta, tienda, estado)``; la firma
+    incluye los parámetros opcionales para no romper si se añaden más.
+    """
+    print(f"{value:4.0%} {label}", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Buscador local de discos duros internos en tiendas españolas."
@@ -51,8 +60,7 @@ def main():
     if args.once:
         try:
             data = demo_dataset() if args.demo else run_search(
-                lambda p, label: print(f"{p:4.0%} {label}", file=sys.stderr),
-                args.debug,
+                cli_progress, args.debug,
             )
             try:
                 store.record_search(data)
